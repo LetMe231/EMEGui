@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MD-01 Controller</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body.dark-mode input,
+    body.dark-mode select,
+    body.dark-mode textarea,
+    body.dark-mode .input-group-text {
+    background-color: #222;
+    color: #eee;
+    border: 1px solid #555;
+    }
+
+    body.dark-mode input::placeholder,
+    body.dark-mode select option {
+    color: #bbb;
+    }
+
+    body.dark-mode {
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+    /* Dark mode card background */
+    body.dark-mode .card {
+    background-color: #1e1e1e !important;
+    border-color: #444 !important;
+    color: #eee;
+    }
+
+    /* Dark mode input group text */
+    body.dark-mode .input-group-text {
+    background-color: #222;
+    color: #eee;
+    border: 1px solid #555;
+    }
+
+    /* Dark mode buttons (optional tweak for softer look) */
+    body.dark-mode .btn-success { background-color: #2e7d32; border-color: #2e7d32; }
+    body.dark-mode .btn-danger  { background-color: #c62828; border-color: #c62828; }
+    body.dark-mode .btn-primary { background-color: #1565c0; border-color: #1565c0; }
+    body.dark-mode .btn-warning { background-color: #f9a825; border-color: #f9a825; }
+
+    body.dark-mode.canvas-card {
+      background-color: #1e1e1e;
+      border-color: #333;
+      color: #e0e0e0;
+    }
+    .canvas-card {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 15px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .canvas-container {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      margin-top: 30px;
+    }
+    #status-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      padding: 10px;
+      color: white;
+      text-align: center;
+      font-weight: bold;
+    }
+  </style>
+
+    <style>
+    /* Light mode (default) */
+    .status-text {
+    color: black !important;
+    }
+    .moon-text {
+    color: orange !important;
+    }
+
+    /* Dark mode overrides */
+    body.dark-mode .status-text {
+    color: white !important;
+    }
+    body.dark-mode .moon-text {
+    color: yellow !important;
+    text-shadow: 0 0 8px yellow;
+    }
+    </style>
+</head>
+<body class="text-center">
+
+  <div class="container my-3">
+
+    <!-- Connection Row -->
+    <div class="row mb-3">
+        <div class="col-md-12 d-flex justify-content-center">
+        <form id="connectForm" class="d-flex me-2">
+            <select name="port" class="form-select me-2">
+            {% for p in ports %}
+                <option value="{{p}}" {% if state.port == p %}selected{% endif %}>{{p}}</option>
+            {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-success">Verbinden</button>
+        </form>
+        <button id="disconnectBtn" type="button" class="btn btn-danger me-2">Trennen</button>
+        <button id="darkModeBtn" type="button" class="btn btn-secondary">🌙 Dark Mode</button>
+        </div>
+    </div>
+
+    <!-- Movement Row -->
+    <div class="row mb-3">
+        <div class="col-md-12 d-flex justify-content-center">
+
+        <!-- Set Form -->
+        <form id="setForm" class="d-flex me-2">
+            <input type="number" name="az" min="0" max="359" step="0.1" value="{{state.az}}" class="form-control me-2" placeholder="Az">
+            <input type="number" name="el" min="0" max="90" step="0.1" value="{{state.el}}" class="form-control me-2" placeholder="El">
+            <button type="submit" class="btn btn-primary">Setzen</button>
+        </form>
+
+        <!-- Action Buttons -->
+        <div class="btn-group ms-2">
+            <button id="trackerBtn" type="button" class="btn btn-success">Tracker Start</button>
+            <button id="stopBtn" type="button" class="btn btn-warning">Stop</button>
+            <button id="parkBtn" type="button" class="btn btn-info">Park</button>
+        </div>
+        </div>
+    </div>
+
+    </div>
+    </div>
+
+
+    <!-- Graphics -->
+    <div class="canvas-container">
+    <div class="canvas-card text-center">
+        <canvas id="azCanvas" width="300" height="300"></canvas>
+        <p id="azText" class="status-text mt-2">Current angle: --°</p>
+        <p id="azMoonText" class="moon-text">Moon angle: --°</p>
+    </div>
+    <div class="canvas-card text-center">
+        <canvas id="elCanvas" width="300" height="300"></canvas>
+        <p id="elText" class="status-text mt-2">Current angle: --°</p>
+        <p id="elMoonText" class="moon-text">Moon angle: --°</p>
+    </div>
+    </div>
+
+  <!-- Status bar -->
+  <div id="status-bar" style="background-color:red;">{{ state.status }}</div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
