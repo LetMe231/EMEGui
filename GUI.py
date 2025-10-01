@@ -47,6 +47,7 @@ class SimpleAntennaGUI(tk.Tk):
         self.el_tracking = 0.0
         self.az_manual = tk.DoubleVar(value=0.0)
         self.el_manual = tk.DoubleVar(value=0.0)
+        self.az_moon, self.el_moon = CalcMoonPos.get_moon_position()
 
         # Eingabefelder
         ttk.Label(self, text="Azimuth (0-359°):").pack(pady=(10, 0))
@@ -85,7 +86,7 @@ class SimpleAntennaGUI(tk.Tk):
         self.stop_btn.state(["disabled"])
 
         # Canvas für Anzeigen
-        self.canvas = tk.Canvas(self, width=600, height=200)
+        self.canvas = tk.Canvas(self, width=600, height=400)
         self.canvas.pack(pady=10)
 
         # ---- Azimuth-Kreis ----
@@ -99,7 +100,10 @@ class SimpleAntennaGUI(tk.Tk):
                                              start=0, extent=360, width=1)
         self.az_valDisp = self.canvas.create_text(self.az_center_x, 
                                                self.az_center_y + 90, 
-                                               text=f'Current angle: 0.0', font=("Arial", 10, "bold"))
+                                               text=f'Current angle: --', font=("Arial", 10, "bold"))
+        self.az_moonDisp = self.canvas.create_text(self.az_center_x, 
+                                               self.az_center_y + 110, 
+                                               text=f'Current moon angle: --', font=("Arial", 10, "bold"))
         
         # ----Azimuth-Anzeige ----
         self.az_pointer = wdg.draw_smooth_line(self.canvas, 
@@ -120,7 +124,10 @@ class SimpleAntennaGUI(tk.Tk):
                                           start=270, extent=90, width=1)
         self.el_valDisp = self.canvas.create_text(self.el_center_x + self.el_radius/2, 
                                                self.el_center_y + 20, 
-                                               text=f'Current angle: 0.0', font=("Arial", 10, "bold"))
+                                               text=f'Current angle: --', font=("Arial", 10, "bold"))
+        self.el_moonDisp = self.canvas.create_text(self.el_center_x + self.el_radius/2, 
+                                               self.el_center_y + 40, 
+                                               text=f'Current moon angle: --', font=("Arial", 10, "bold"))
         
         # ----Elevation-Anzeige ----
         self.el_pointer = wdg.draw_smooth_line(self.canvas, 
@@ -168,7 +175,8 @@ class SimpleAntennaGUI(tk.Tk):
             # Update Buttons
             self.disconnect_btn.state(["!disabled"])
             self.set_btn.state(["!disabled"])
-            self.tracker_btn.state(["!disabled"])
+            if self.el_moon >= 15:
+                self.tracker_btn.state(["!disabled"])
             self.connect_btn.state(["disabled"])
             self.stop_btn.state(["!disabled"])
 
@@ -252,7 +260,10 @@ class SimpleAntennaGUI(tk.Tk):
             # Disable manual Input
             self.az_entry.state(["disabled"])
             self.el_entry.state(["disabled"])
-            self.moon_tracking()
+            if self.el_moon >= 15:
+                self.moon_tracking()
+            else:
+                self.cmd_queue.put("error", "Moon too low")
         else:
             self.tracker_btn.config(text="Tracker Start")
             
@@ -305,6 +316,9 @@ class SimpleAntennaGUI(tk.Tk):
         if self.tracking:
             try:
                 self.az_tracking, self.el_tracking = CalcMoonPos.get_moon_position()
+                if self.el_tracking <= 15:
+                  
+                    return
                 self.cmd_queue.put(("set", self.az_tracking, self.el_tracking))
                 self.status_var.set(f"Tracking... Az={self.az_tracking:.1f}°, El={self.el_tracking:.1f}°")
                 self.status_label.config(foreground=self.COLORS["tracking"])
@@ -412,6 +426,7 @@ class SimpleAntennaGUI(tk.Tk):
                                             self.az_center_x, self.az_center_y,
                                             x, y, width=2, color=self.COLORS["pointer"])
             self.canvas.itemconfig(self.az_valDisp, text=f"Current angle: {az:.1f}°")
+            self.canvas.itemconfig(self.az_moonDisp, text=f"Current Moon angle: {self.az_moon:.1f}°")
 
             # ---- Elevation pointer ----
             angle_rad = math.radians(el)
@@ -422,6 +437,7 @@ class SimpleAntennaGUI(tk.Tk):
                                             self.el_center_x, self.el_center_y,
                                             x, y, width=2, color=self.COLORS["pointer"])
             self.canvas.itemconfig(self.el_valDisp, text=f"Current angle: {el:.1f}°")
+            self.canvas.itemconfig(self.el_moonDisp, text=f"Current Moon angle: {self.el_moon:.1f}°")
         else:
             self.azCross1 = wdg.draw_smooth_line(self.canvas, 
                                   self.az_center_x + self.az_radius, 
@@ -455,6 +471,8 @@ class SimpleAntennaGUI(tk.Tk):
 
             self.canvas.itemconfig(self.az_valDisp, text=f"Current angle: --°")
             self.canvas.itemconfig(self.el_valDisp, text=f"Current angle: --°")
+            self.canvas.itemconfig(self.az_moonDisp, text=f"Current Moon angle: {self.az_moon:.1f}°")
+            self.canvas.itemconfig(self.el_moonDisp, text=f"Current Moon angle: {self.el_moon:.1f}°")
             self.canvas.delete(self.el_pointer)
             self.canvas.delete(self.az_pointer) 
 
