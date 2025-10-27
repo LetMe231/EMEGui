@@ -1,11 +1,21 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, Response
+from camera import CameraStream, mjpeg_generator
 import serial.tools.list_ports
 import threading, time
-serial_lock = threading.Lock()
-
 # import your existing backend modules
 from serialComm import SerialAntenna
 import CalcMoonPos
+
+serial_lock = threading.Lock()
+CAMERA_SOURCE = "rtsp://admin:EME_2025@192.168.0.3:554/h264Preview_01_main"
+camera = CameraStream(src=CAMERA_SOURCE, jpeg_quality=80)
+
+# Tracking worker
+tracking_thread = None
+tracking_stop = threading.Event()
+
+PARKAZ = 285
+PARKEL = 60
 
 app = Flask(__name__)
 
@@ -30,20 +40,12 @@ def poll_loop():
     while True:
         if state["connected"] and ant:
             try:
-                # Read current position for display
+                # Read current position
                 with serial_lock:
                     az, el = ant.read_md01_position()
                 state["az"] = round(az, 1)
                 state["el"] = round(el, 1)
                 fail_count = 0
-
-                # If tracking, command moon setpoint
-                if state["tracking"] and state["el_moon"] >= 15:
-                    with serial_lock:
-                        ant.send_rot2_set(ant.ser, state["az_moon"], state["el_moon"])
-                    state["status"] = (f"Tracking... Az={state['az_moon']:.1f}°, "
-                                       f"El={state['el_moon']:.1f}°")
-
             except Exception as e:
                 fail_count += 1
                 state["status"] = f"Lesefehler ({fail_count})"
@@ -57,11 +59,11 @@ def poll_loop():
                     state["connected"] = False
                     state["status"] = f"Verbindung verloren: {e}"
                     fail_count = 0
-                time.sleep(2)
+                time.sleep(2)  # backoff on error
         else:
             time.sleep(1)
 
-        # Always update moon position
+        # Always refresh moon position
         try:
             azm, elm = CalcMoonPos.get_moon_position()
             state["az_moon"] = round(azm, 1)
@@ -69,17 +71,39 @@ def poll_loop():
         except Exception:
             pass
 
-        time.sleep(0.5)
+        time.sleep(1)
 
-        # Always refresh moon pos
+def tracking_loop():
+    """Send moon setpoints periodically while tracking is ON."""
+    global ant, state
+    while not tracking_stop.is_set():
+        if not (state["connected"] and ant):
+            time.sleep(1)
+            continue
+
+        # refresh moon pos (extra guard; poll_loop also does this)
         try:
             azm, elm = CalcMoonPos.get_moon_position()
             state["az_moon"] = round(azm, 1)
             state["el_moon"] = round(elm, 1)
-        except Exception as e:
-            print(f"[MOON ERROR] {e}")
+        except Exception:
+            pass
 
-        time.sleep(1)
+        try:
+            if state["el_moon"] >= 15:
+                with serial_lock:
+                    ant.send_rot2_set(ant.ser, state["az_moon"], state["el_moon"])
+                state["status"] = f"Tracking... Az={state['az_moon']:.1f}°, El={state['el_moon']:.1f}°"
+            else:
+                state["status"] = "Tracking pausiert (Mond < 15°)"
+        except Exception as e:
+            state["status"] = f"Tracking-Fehler: {e}"
+
+        # send every 5s (adjust if you want tighter following)
+        for _ in range(5):
+            if tracking_stop.is_set():
+                break
+            time.sleep(1)
 
 
 
@@ -129,14 +153,21 @@ def connect():
 
 @app.route("/disconnect", methods=["POST"])
 def disconnect():
-    global ant
+    global ant, tracking_thread, tracking_stop
+    # stop tracking worker
+    tracking_stop.set()
+    try:
+        if tracking_thread:
+            tracking_thread.join(timeout=1)
+    except:
+        pass
+
     if ant:
         try:
-            # Park before closing
             with serial_lock:
-                ant.send_rot2_set(ant.ser, 18, 60)
+                ant.send_rot2_set(ant.ser, 0, 0)
                 ant.stopMovement()
-            time.sleep(0.3)  # small flush delay
+            time.sleep(0.3)
         except Exception as e:
             print(f"[WARN] Park/Stop failed on disconnect: {e}")
         try:
@@ -170,23 +201,65 @@ def set_position():
         return jsonify(success=True, status=state["status"])
     except Exception as e:
         return jsonify(success=False, status=f"Fehler: {e}")
+    
+@app.route("/tracker", methods=["POST"])
 @app.route("/tracker", methods=["POST"])
 def tracker():
-    global ant
-    if not ant:
+    global ant, tracking_thread, tracking_stop
+    if not (state["connected"] and ant):
         return jsonify(success=False, status="Controller nicht verbunden!")
 
+    force = request.args.get("force", "0") == "1"
     state["tracking"] = not state["tracking"]
+
     if state["tracking"]:
-        state["status"] = "Tracking gestartet"
+        # start (or restart) worker
+        if tracking_thread and tracking_thread.is_alive():
+            tracking_stop.set()
+            try: tracking_thread.join(timeout=1)
+            except: pass
+        tracking_stop.clear()
+
+        def tracking_loop():
+            while not tracking_stop.is_set():
+                if not (state["connected"] and ant):
+                    time.sleep(1); continue
+                # update moon pos
+                try:
+                    azm, elm = CalcMoonPos.get_moon_position()
+                    state["az_moon"] = round(azm, 1)
+                    state["el_moon"] = round(elm, 1)
+                except: pass
+
+                if state["el_moon"] >= 15 or force:
+                    try:
+                        with serial_lock:
+                            ant.send_rot2_set(ant.ser, state["az_moon"], state["el_moon"])
+                        state["status"] = f"Tracking... Az={state['az_moon']:.1f}°, El={state['el_moon']:.1f}°"
+                    except Exception as e:
+                        state["status"] = f"Tracking-Fehler: {e}"
+                else:
+                    state["status"] = "Tracking pausiert (Mond < 15°)"
+
+                for _ in range(5):
+                    if tracking_stop.is_set(): break
+                    time.sleep(1)
+
+        import threading
+        tracking_thread = threading.Thread(target=tracking_loop, daemon=True)
+        tracking_thread.start()
+        return jsonify(success=True, tracking=True, status="Tracking gestartet")
     else:
+        tracking_stop.set()
+        try:
+            if tracking_thread:
+                tracking_thread.join(timeout=1)
+        except: pass
         try:
             with serial_lock:
                 ant.stopMovement()
-        except Exception as e:
-            print(f"[TRACKER STOP ERROR] {e}")
-        state["status"] = "Tracking gestoppt, Bewegung gestoppt"
-    return jsonify(success=True, tracking=state["tracking"], status=state["status"])
+        except: pass
+        return jsonify(success=True, tracking=False, status="Tracking gestoppt, Bewegung gestoppt")
 
 
 @app.route("/stop", methods=["POST"])
@@ -211,12 +284,33 @@ def park():
         return jsonify(success=False, status="Controller nicht verbunden!")
     try:
         with serial_lock:
-            ant.send_rot2_set(ant.ser, 18, 60)   # Park at Az=18, El=60
+            ant.send_rot2_set(ant.ser, PARKAZ, PARKEL)   
             ant.stopMovement()
         state["status"] = "Parkposition angefahren"
         return jsonify(success=True, status=state["status"])
     except Exception as e:
         return jsonify(success=False, status=f"Fehler beim Parken: {e}")
+
+@app.route("/camera/start", methods=["POST"])
+def camera_start():
+    try:
+        camera.start()
+        return jsonify(success=True, status="Kamera gestartet")
+    except Exception as e:
+        return jsonify(success=False, status=f"Kamera-Fehler: {e}")
+
+@app.route("/camera/stop", methods=["POST"])
+def camera_stop():
+    try:
+        camera.stop()
+        return jsonify(success=True, status="Kamera gestoppt")
+    except Exception as e:
+        return jsonify(success=False, status=f"Kamera-Fehler: {e}")
+
+@app.route("/video.mjpg")
+def video_mjpg():
+    return Response(mjpeg_generator(camera, fps=25),
+                    mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 

@@ -84,7 +84,7 @@ function drawAzimuth(az, azMoon, connected) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    let radPark = (18 - 90) * Math.PI / 180; // 0° up
+    let radPark = (285 - 90) * Math.PI / 180; // 0° up
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(cx + r * Math.cos(radPark), cy + r * Math.sin(radPark));
@@ -223,75 +223,158 @@ function updateStatusBar(text, success) {
     }
   }
 }
+// --- Theme handling ---
+function isDarkMode() {
+  return document.body.classList.contains("dark-mode");
+}
+
+function applyThemeLabels() {
+  const dark = isDarkMode();
+  document.querySelectorAll("[data-label-light]").forEach(el => {
+    const txt = dark ? el.dataset.labelDark : el.dataset.labelLight;
+    if (txt) {
+      el.textContent = txt;
+      el.setAttribute("aria-label", txt);
+      el.title = txt;
+    }
+  });
+}
+
+function setTheme(dark) {
+  document.body.classList.toggle("dark-mode", dark);
+  localStorage.setItem("darkMode", dark ? "1" : "0");
+  applyThemeLabels();
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const saved = localStorage.getItem("darkMode");
+  if (saved === "1") document.body.classList.add("dark-mode");
+  applyThemeLabels();
+
+  const toggle = document.getElementById("darkModeBtn");
+  if (toggle) toggle.addEventListener("click", () => setTheme(!isDarkMode()));
+});
+
 
 async function refreshStatus() {
-    const isDark = document.body.classList.contains("dark-mode");
-    const normalText = isDark ? "white" : "black";
-    const moonText   = isDark ? "yellow" : "orange";
+  const isDark = document.body.classList.contains("dark-mode");
+  const normalText = isDark ? "white" : "black";
+  const moonText   = isDark ? "yellow" : "orange";
+
   try {
     const res = await fetch("/status");
     const data = await res.json();
 
     updateStatusBar(data.status, data.connected);
 
-    // Numbers under the canvases (if you have those elements)
-    const azText = document.getElementById("azText");
+    // DOM refs
+    const azText     = document.getElementById("azText");
     const azMoonText = document.getElementById("azMoonText");
-    const elText = document.getElementById("elText");
+    const elText     = document.getElementById("elText");
     const elMoonText = document.getElementById("elMoonText");
+    const trackerBtn = document.getElementById("trackerBtn");
+    const forceChk   = document.getElementById("forceTrackChk");
 
+    // Numbers under canvases
     if (azText) {
-    azText.innerText = data.connected ? `Current angle: ${(+data.az).toFixed(1)}°` : "Current angle: --°";
-    azText.style.color = normalText;
+      azText.innerText = data.connected ? `Current angle: ${(+data.az).toFixed(1)}°` : "Current angle: --°";
+      azText.style.color = normalText;
     }
-
     if (azMoonText) {
-    azMoonText.innerText = `Moon angle: ${(+data.az_moon).toFixed(1)}°`;
-    azMoonText.style.color = moonText;
+      azMoonText.innerText = `Moon angle: ${(+data.az_moon).toFixed(1)}°`;
+      azMoonText.style.color = moonText;
+      azMoonText.style.textShadow = isDark ? "0 0 8px yellow" : "";
     }
-
     if (elText) {
-    elText.innerText = data.connected ? `Current angle: ${(+data.el).toFixed(1)}°` : "Current angle: --°";
-    elText.style.color = normalText;
+      elText.innerText = data.connected ? `Current angle: ${(+data.el).toFixed(1)}°` : "Current angle: --°";
+      elText.style.color = normalText;
     }
-
     if (elMoonText) {
-    elMoonText.innerText = `Moon angle: ${(+data.el_moon).toFixed(1)}°`;
-    elMoonText.style.color = moonText;
-    }
-    
-    if (isDark) {
-    azMoonText.style.textShadow = "0 0 8px yellow";
-    elMoonText.style.textShadow = "0 0 8px yellow";
-    } else {
-    azMoonText.style.textShadow = "";
-    elMoonText.style.textShadow = "";
+      const moonLow = (+data.el_moon) < 15;
+      const badge = moonLow ? " — paused <15°" : "";
+      elMoonText.innerText = `Moon angle: ${(+data.el_moon).toFixed(1)}°${badge}`;
+      elMoonText.style.color = moonText;
+      elMoonText.style.textShadow = isDark ? "0 0 8px yellow" : "";
     }
 
+    // Tracker button UX (disable if moon < 15° unless forced; also toggle label on active)
+    if (trackerBtn) {
+      const moonLow = (+data.el_moon) < 15;
+      const forced  = forceChk && forceChk.checked;
+      const canTrack = !!data.connected && (!moonLow || forced);
 
-    drawAzimuth(data.az, data.az_moon, data.connected);
-    drawElevation(data.el, data.el_moon, data.connected);
+      trackerBtn.disabled = !canTrack;
+      trackerBtn.title = !canTrack ? "Moon below 15° — tracking paused" : "";
+
+      // Reflect backend tracking state in button text/color
+      if (data.tracking) {
+        trackerBtn.innerText = "Tracker Stop";
+        trackerBtn.classList.remove("btn-success");
+        trackerBtn.classList.add("btn-danger");
+      } else {
+        trackerBtn.innerText = "Tracker Start";
+        trackerBtn.classList.remove("btn-danger");
+        trackerBtn.classList.add("btn-success");
+      }
+    }
+
+    // Redraw dials (ensure numeric/boolean types)
+    drawAzimuth(+data.az, +data.az_moon, !!data.connected);
+    drawElevation(+data.el, +data.el_moon, !!data.connected);
+
   } catch (e) {
-    // optional: show error on status bar
     updateStatusBar(`Fehler: ${e}`, false);
   }
 }
+// ===== DARK MODE SYSTEM =====
+function isDarkMode() {
+  return document.body.classList.contains("dark-mode");
+}
 
-// ==================== Init & Event Wiring ====================
+function applyThemeLabels() {
+  const dark = isDarkMode();
+  document.querySelectorAll("[data-label-light]").forEach(el => {
+    const txt = dark ? el.dataset.labelDark : el.dataset.labelLight;
+    if (txt) {
+      el.textContent = txt;
+      el.setAttribute("aria-label", txt);
+      el.title = txt;
+    }
+  });
+}
+
+function setTheme(dark) {
+  document.body.classList.toggle("dark-mode", dark);
+  localStorage.setItem("darkMode", dark ? "dark" : "light");
+  applyThemeLabels();
+
+  // Redraw graphics with new colors if those functions exist
+  if (typeof refreshStatus === "function") refreshStatus();
+}
+
+// Initialize on DOM ready
 document.addEventListener("DOMContentLoaded", () => {
-  // Restore dark-mode preference
+  // Restore saved preference
   const saved = localStorage.getItem("darkMode");
-  if (saved === "true") document.body.classList.add("dark-mode");
+  const startDark = saved ? saved === "dark" : true;
+  setTheme(startDark);
 
-  // Dark mode toggle (ensure type="button" in HTML to avoid submitting a form)
+  // Bind toggle button
   const darkBtn = document.getElementById("darkModeBtn");
   if (darkBtn) {
-    darkBtn.addEventListener("click", () => {
-      document.body.classList.toggle("dark-mode");
-      localStorage.setItem("darkMode", document.body.classList.contains("dark-mode") ? "true" : "false");
-      refreshStatus(); // redraw dials with new colors
-    });
+    darkBtn.addEventListener("click", () => setTheme(!isDarkMode()));
   }
+});
+
+
+// ===== INIT & EVENT WIRING (single block) =====
+document.addEventListener("DOMContentLoaded", () => {
+  // restore theme
+  setTheme(localStorage.getItem("darkMode") === "1");
+
+  // Dark mode toggle
+  const darkBtn = document.getElementById("darkModeBtn");
+  if (darkBtn) darkBtn.addEventListener("click", () => setTheme(!isDarkMode()));
 
   // Connect
   const connectForm = document.getElementById("connectForm");
@@ -317,7 +400,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Setzen
+  // Set position
   const setForm = document.getElementById("setForm");
   if (setForm) {
     setForm.addEventListener("submit", async (e) => {
@@ -330,45 +413,77 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
- // Tracker toggle
-document.getElementById("trackerBtn").onclick = async () => {
-  let res = await fetch("/tracker", { method: "POST" });
-  let data = await res.json();
-  updateStatusBar(data.status, data.success);
-
-  // Change button text
-  const btn = document.getElementById("trackerBtn");
-  if (data.tracking) {
-    btn.innerText = "Tracker Stop";
-    btn.classList.remove("btn-success");
-    btn.classList.add("btn-danger");
-  } else {
-    btn.innerText = "Tracker Start";
-    btn.classList.remove("btn-danger");
-    btn.classList.add("btn-success");
+  // Tracker
+  const trackerBtn = document.getElementById("trackerBtn");
+  if (trackerBtn) {
+    trackerBtn.addEventListener("click", async () => {
+      const force = document.getElementById("forceTrackChk")?.checked ? "1" : "0";
+      const res = await fetch(`/tracker?force=${force}`, { method: "POST" });
+      const data = await res.json();
+      updateStatusBar(data.status, data.success);
+      // Button label/color mirror backend state
+      if (data.tracking) {
+        trackerBtn.innerText = "Tracker Stop";
+        trackerBtn.classList.remove("btn-success");
+        trackerBtn.classList.add("btn-danger");
+      } else {
+        trackerBtn.innerText = "Tracker Start";
+        trackerBtn.classList.remove("btn-danger");
+        trackerBtn.classList.add("btn-success");
+      }
+      refreshStatus();
+    });
   }
 
-  refreshStatus();
-};
+  // Stop all
+  const stopBtn = document.getElementById("stopBtn");
+  if (stopBtn) {
+    stopBtn.addEventListener("click", async () => {
+      const res = await fetch("/stop", { method: "POST" });
+      const data = await res.json();
+      updateStatusBar(data.status, data.success);
+      refreshStatus();
+    });
+  }
 
-// Stop button
-document.getElementById("stopBtn").onclick = async () => {
-  let res = await fetch("/stop", { method: "POST" });
-  let data = await res.json();
-  updateStatusBar(data.status, data.success);
-  refreshStatus();
-};
+  // Park
+  const parkBtn = document.getElementById("parkBtn");
+  if (parkBtn) {
+    parkBtn.addEventListener("click", async () => {
+      const res = await fetch("/park", { method: "POST" });
+      const data = await res.json();
+      updateStatusBar(data.status, data.success);
+      refreshStatus();
+    });
+  }
 
-document.getElementById("parkBtn").onclick = async () => {
-  const res = await fetch("/park", { method: "POST" });
-  const data = await res.json();
-  updateStatusBar(data.status, data.success);
-  refreshStatus();
-};
+  // Camera flashlight (if present)
+  const flashBtn = document.getElementById("flashBtn");
+  if (flashBtn) {
+    let on = false;
+    flashBtn.addEventListener("click", async () => {
+      const desired = on ? "off" : "on";
+      try {
+        const res = await fetch("/camera/flashlight", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ state: desired })
+        });
+        const data = await res.json();
+        updateStatusBar(data.status, data.success);
+        if (data.success) {
+          on = desired === "on";
+          flashBtn.textContent = on ? "💡 Flashlight OFF" : "💡 Flashlight ON";
+          flashBtn.classList.toggle("btn-warning", on);
+          flashBtn.classList.toggle("btn-outline-light", !on);
+        }
+      } catch (e) {
+        updateStatusBar("Flashlight error: " + e, false);
+      }
+    });
+  }
 
-
-
-  // First draw + poll
+  // First draw + periodic refresh
   refreshStatus();
   setInterval(refreshStatus, 2000);
 });

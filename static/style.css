@@ -1,0 +1,77 @@
+/* ---------- Base layout ---------- */
+body {
+  background: #f9f9f9;
+  color: #222;
+}
+.canvas-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 30px;
+}
+.canvas-card {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 15px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.camera-frame {
+  width: 100%;
+  max-width: 480px;
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+#status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  padding: 10px;
+  color: white;
+  text-align: center;
+  font-weight: bold;
+  background: red;
+}
+
+/* ---------- Text colors ---------- */
+.status-text { color: black; }
+.moon-text { color: orange; }
+
+/* ---------- Dark mode ---------- */
+body.dark-mode {
+  background-color: #121212;
+  color: #e0e0e0;
+}
+body.dark-mode .canvas-card {
+  background-color: #1e1e1e;
+  border-color: #333;
+}
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea,
+body.dark-mode .input-group-text {
+  background-color: #222;
+  color: #eee;
+  border: 1px solid #555;
+}
+body.dark-mode .btn-success { background-color: #2e7d32; border-color: #2e7d32; }
+body.dark-mode .btn-danger  { background-color: #c62828; border-color: #c62828; }
+body.dark-mode .btn-primary { background-color: #1565c0; border-color: #1565c0; }
+body.dark-mode .btn-warning { background-color: #f9a825; border-color: #f9a825; }
+
+body.dark-mode .status-text { color: white; }
+body.dark-mode .moon-text {
+  color: yellow;
+  text-shadow: 0 0 8px yellow;
+}
+
+/* ---------- Optional minor tweaks ---------- */
+.btn-outline-light {
+  color: #ccc;
+  border-color: #777;
+}
+body.dark-mode .btn-outline-light {
+  color: #fff;
+  border-color: #999;
+}
