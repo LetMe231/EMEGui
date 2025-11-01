@@ -24,7 +24,7 @@ function drawTicks(ctx, cx, cy, r, startAngle, endAngle, step, labelStep, color,
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // label (skip 360° so 0° appears only once)
+    // label skip 360° so 0° appears only once
     if (angle % labelStep === 0 && !(angle === endAngle && endAngle === 360)) {
       const offset = outside ? 15 : -25;
       const lx = cx + (r + offset) * Math.cos(rad);
@@ -42,23 +42,23 @@ function drawAzimuth(az, azMoon, connected) {
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, c.width, c.height);
 
-  const r = 100;
-  const cx = c.width / 2, cy = c.height / 2;
+  const r = 100;                              // define radius of azimuth circle
+  const cx = c.width / 2, cy = c.height / 2;  // define center of circle
 
-  const isDark = document.body.classList.contains("dark-mode");
+  const isDark = isDarkMode();
   const color = isDark ? "white" : "black";
 
-  // circle
+  // draw circle
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, 2 * Math.PI);
   ctx.lineWidth = 2;
   ctx.strokeStyle = color;
   ctx.stroke();
 
-  // ticks + labels
+  // add ticks + labels
   drawTicks(ctx, cx, cy, r, 0, 360, 30, 90, color, false, false);
 
-  // label
+  // add title
   ctx.font = "bold 14px Arial";
   ctx.fillStyle = color;
   ctx.textAlign = "center";
@@ -74,7 +74,7 @@ function drawAzimuth(az, azMoon, connected) {
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // moon pointer (dashed)
+    // moon pointer
     let radMoon = (azMoon - 90) * Math.PI / 180;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
@@ -84,7 +84,8 @@ function drawAzimuth(az, azMoon, connected) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    let radPark = (285 - 90) * Math.PI / 180; // 0° up
+    // park position pointer
+    let radPark = (285 - 90) * Math.PI / 180;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(cx + r * Math.cos(radPark), cy + r * Math.sin(radPark));
@@ -111,35 +112,36 @@ function drawAzimuth(az, azMoon, connected) {
 }
 
 function drawElevation(el, elMoon, connected) {
+  // get canvas
   const c = document.getElementById("elCanvas");
   if (!c) return;
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, c.width, c.height);
 
-  // Large quarter circle so it matches the full-circle footprint visually
-  const Rq = 200;                      // quarter radius
-  const cxCanvas = c.width / 2;        // 150 (canvas is 300)
-  const cyCanvas = c.height / 2;       // 150
-  const left = cxCanvas - 100;         // left of 200x200 box
-  const top = cyCanvas - 100;          // top of 200x200 box
+  // draw elevatuion quarter circle
+  const Rq = 200;                 // define radius
+  const cxCanvas = c.width / 2;   // calculate center of canvas
+  const cyCanvas = c.height / 2;
+  const left = cxCanvas - 100;
+  const top = cyCanvas - 100;
   const bottom = top + 200;
-  const cx = left;                     // quarter center at bottom-left
+  const cx = left;
   const cy = bottom;
 
-  const isDark = document.body.classList.contains("dark-mode");
+  const isDark = isDarkMode();
   const color = isDark ? "white" : "black";
 
-  // quarter arc (top to right)
+  // draw quarter arc
   ctx.beginPath();
   ctx.arc(cx, cy, Rq, -Math.PI / 2, 0);
   ctx.lineWidth = 2;
   ctx.strokeStyle = color;
   ctx.stroke();
 
-  // ticks + labels OUTSIDE the arc
+  // draw ticks + labels
   drawTicks(ctx, cx, cy, Rq, 0, 90, 15, 30, color, true, true);
 
-  // label
+  // set title
   ctx.font = "bold 14px Arial";
   ctx.fillStyle = color;
   ctx.textAlign = "center";
@@ -169,6 +171,7 @@ function drawElevation(el, elMoon, connected) {
     ctx.stroke();
     ctx.setLineDash([]);
 
+    // park position pointer
     let radPark = (60) * Math.PI / 180;
     let px = cx + Rq * Math.cos(radPark);
     let py = cy - Rq * Math.sin(radPark);
@@ -204,7 +207,7 @@ function updateStatusBar(text, success) {
   if (!statusBar) return;
 
   statusBar.innerText = text;
-  const isDark = document.body.classList.contains("dark-mode");
+  const isDark = isDarkMode();
 
   if (isDark) {
     statusBar.style.backgroundColor = "#000";
@@ -223,41 +226,9 @@ function updateStatusBar(text, success) {
     }
   }
 }
-// --- Theme handling ---
-function isDarkMode() {
-  return document.body.classList.contains("dark-mode");
-}
-
-function applyThemeLabels() {
-  const dark = isDarkMode();
-  document.querySelectorAll("[data-label-light]").forEach(el => {
-    const txt = dark ? el.dataset.labelDark : el.dataset.labelLight;
-    if (txt) {
-      el.textContent = txt;
-      el.setAttribute("aria-label", txt);
-      el.title = txt;
-    }
-  });
-}
-
-function setTheme(dark) {
-  document.body.classList.toggle("dark-mode", dark);
-  localStorage.setItem("darkMode", dark ? "1" : "0");
-  applyThemeLabels();
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  const saved = localStorage.getItem("darkMode");
-  if (saved === "1") document.body.classList.add("dark-mode");
-  applyThemeLabels();
-
-  const toggle = document.getElementById("darkModeBtn");
-  if (toggle) toggle.addEventListener("click", () => setTheme(!isDarkMode()));
-});
-
 
 async function refreshStatus() {
-  const isDark = document.body.classList.contains("dark-mode");
+  const isDark = isDarkMode();
   const normalText = isDark ? "white" : "black";
   const moonText   = isDark ? "yellow" : "orange";
 
@@ -352,27 +323,51 @@ function setTheme(dark) {
   if (typeof refreshStatus === "function") refreshStatus();
 }
 
-// Initialize on DOM ready
-document.addEventListener("DOMContentLoaded", () => {
-  // Restore saved preference
-  const saved = localStorage.getItem("darkMode");
-  const startDark = saved ? saved === "dark" : true;
-  setTheme(startDark);
-
-  // Bind toggle button
-  const darkBtn = document.getElementById("darkModeBtn");
-  if (darkBtn) {
-    darkBtn.addEventListener("click", () => setTheme(!isDarkMode()));
-  }
-});
 
 
 // ===== INIT & EVENT WIRING (single block) =====
 document.addEventListener("DOMContentLoaded", () => {
-  // restore theme
-  setTheme(localStorage.getItem("darkMode") === "1");
+  // Fullscreen toggle for camera
+  const camFsBtn = document.getElementById("camFsBtn");
+  const camFsContainer = document.getElementById("camFsContainer");
+  const camImg = document.getElementById("camStream");
 
-  // Dark mode toggle
+  async function toggleCamFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        await (camFsContainer.requestFullscreen
+          ? camFsContainer.requestFullscreen()
+          : camFsContainer.webkitRequestFullscreen()); // Safari
+      } else {
+        await (document.exitFullscreen
+          ? document.exitFullscreen()
+          : document.webkitExitFullscreen()); // Safari
+      }
+    } catch (e) {
+      updateStatusBar("Fullscreen error: " + e, false);
+    }
+  }
+
+  function setFsButtonLabel() {
+    if (camFsBtn) {
+      camFsBtn.textContent = document.fullscreenElement ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
+    }
+  }
+
+  if (camFsBtn && camFsContainer) {
+    camFsBtn.addEventListener("click", toggleCamFullscreen);
+    // Double-click the video to toggle, too
+    if (camImg) camImg.addEventListener("dblclick", toggleCamFullscreen);
+
+    // Keep label in sync when user presses ESC, etc.
+    document.addEventListener("fullscreenchange", setFsButtonLabel);
+    document.addEventListener("webkitfullscreenchange", setFsButtonLabel);
+    setFsButtonLabel();
+  }
+
+  // Dark mode toggle with forced darkmode at start
+  setTheme(true);
+  localStorage.setItem("darkMode", "dark");
   const darkBtn = document.getElementById("darkModeBtn");
   if (darkBtn) darkBtn.addEventListener("click", () => setTheme(!isDarkMode()));
 
@@ -454,32 +449,6 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
       updateStatusBar(data.status, data.success);
       refreshStatus();
-    });
-  }
-
-  // Camera flashlight (if present)
-  const flashBtn = document.getElementById("flashBtn");
-  if (flashBtn) {
-    let on = false;
-    flashBtn.addEventListener("click", async () => {
-      const desired = on ? "off" : "on";
-      try {
-        const res = await fetch("/camera/flashlight", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ state: desired })
-        });
-        const data = await res.json();
-        updateStatusBar(data.status, data.success);
-        if (data.success) {
-          on = desired === "on";
-          flashBtn.textContent = on ? "💡 Flashlight OFF" : "💡 Flashlight ON";
-          flashBtn.classList.toggle("btn-warning", on);
-          flashBtn.classList.toggle("btn-outline-light", !on);
-        }
-      } catch (e) {
-        updateStatusBar("Flashlight error: " + e, false);
-      }
     });
   }
 

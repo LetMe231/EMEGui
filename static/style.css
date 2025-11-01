@@ -75,3 +75,36 @@ body.dark-mode .btn-outline-light {
   color: #fff;
   border-color: #999;
 }
+/* your existing normal layout is fine */
+.camera-frame {
+  width: 100%;
+  max-width: 480px;       /* keeps it tidy in normal layout */
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+
+/* Fullscreen container fills the viewport */
+.cam-fs-container:fullscreen,
+.cam-fs-container:-webkit-full-screen {
+  background: black;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+}
+
+/* IMPORTANT: remove the 480px cap in fullscreen */
+.cam-fs-container:fullscreen .camera-frame,
+.cam-fs-container:-webkit-full-screen .camera-frame {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;   /* ← override the cap */
+  max-height: none !important;  /* ← override any max-height */
+  object-fit: contain;          /* or 'cover' if you prefer zero borders */
+  border: none;
+  border-radius: 0;
+}
+

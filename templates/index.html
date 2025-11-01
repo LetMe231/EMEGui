@@ -40,7 +40,7 @@
         <form id="setForm" class="d-flex me-2">
           <input type="number" name="az" min="0" max="359" step="0.1"
                  value="{{state.az}}" class="form-control me-2" placeholder="Az">
-          <input type="number" name="el" min="0" max="90" step="0.1"
+          <input type="number" name="el" min="15" max="90" step="0.1"
                  value="{{state.el}}" class="form-control me-2" placeholder="El">
           <button type="submit" class="btn btn-primary">Setzen</button>
         </form>
@@ -76,12 +76,17 @@
     <div class="canvas-card text-center">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <h5 class="mb-0">Antenna Camera</h5>
-        <!--<button id="flashBtn" type="button" class="btn btn-outline-light">💡 Flashlight ON</button> -->
-      </div>
-      <img id="camStream" src="/video.mjpg" alt="Camera stream"
-           class="camera-frame">
+        <div class="btn-group">
+          <button id="camFsBtn" type="button" class="btn btn-outline-info">⛶ Fullscreen</button>
     </div>
   </div>
+
+  <!-- Wrap the <img> so we can fullscreen the whole area -->
+  <div id="camFsContainer" class="cam-fs-container">
+    <img id="camStream" src="/video.mjpg" alt="Camera stream" class="camera-frame">
+  </div>
+</div>
+
 
   <!-- Status bar -->
   <div id="status-bar">{{ state.status }}</div>
