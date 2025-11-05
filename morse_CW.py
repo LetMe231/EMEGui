@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import max_len_seq
 from scipy.signal import find_peaks
+import os
 
 
 MORSE = {
@@ -99,6 +100,13 @@ if __name__ == "__main__":
     chips, length_pn = set_pn_seq(6, fs)
     noisy_pn, noise_pn = add_noise((np.array(chips)+1)/2, snr)
 
+
+    
+    save_path = r'C:\Users\yves.looser\OneDrive - OST\Dokumente/binforMorse.bin'  # <- change this
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    morse1.astype('<f4').ravel().tofile(save_path)
+    print('Saved to:', save_path)
+    
     #noisy_morse_2 = np.concatenate((noisy_morse_2, noise_2))
     #length *= 3
     #noisy_morse_1, noise_1 = add_noise(morse, snr)
