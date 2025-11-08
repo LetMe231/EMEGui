@@ -20,13 +20,16 @@ class CameraStream:
         self.frame = None
         self.running = False
         self.thread = None
+        self.last_error = None
+        self.last_frame_ts = None
 
     def start(self):
         if self.running:
             return
         self.cap = cv2.VideoCapture(self.src)
         if not self.cap.isOpened():
-            raise RuntimeError(f"Kamera-Quelle konnte nicht geöffnet werden: {self.src}")
+            self.last_error = f"Could not open source: {self.src}"
+            raise RuntimeError(self.last_error)
         self.running = True
         self.thread = threading.Thread(target=self._reader, daemon=True)
         self.thread.start()
@@ -35,14 +38,13 @@ class CameraStream:
         while self.running:
             ok, frame = self.cap.read()
             if not ok:
-                # small backoff on failure; try again
                 time.sleep(0.1)
                 continue
-            # optional resize
             if self.width and self.height:
                 frame = cv2.resize(frame, (self.width, self.height))
             with self.lock:
                 self.frame = frame
+                self.last_frame_ts = time.time()
 
     def get_jpeg(self):
         with self.lock:
@@ -64,6 +66,19 @@ class CameraStream:
             except:
                 pass
             self.cap = None
+
+    def get_health(self):
+        with self.lock:
+            has_frame = self.frame is not None
+            last_ts = self.last_frame_ts
+        age = None if last_ts is None else (time.time() - last_ts)
+        return {
+            "running": bool(self.running),
+            "has_frame": bool(has_frame),
+            "last_frame_age": age,
+            "source": str(self.src),
+            "error": self.last_error
+        }
 
 
 # ---- Helpers for Flask integration ----

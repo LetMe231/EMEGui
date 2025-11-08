@@ -20,10 +20,10 @@
               <option value="{{p}}" {% if state.port == p %}selected{% endif %}>{{p}}</option>
             {% endfor %}
           </select>
-          <button type="submit" class="btn btn-success">Verbinden</button>
+          <button type="submit" class="btn btn-success">Connect</button>
         </form>
 
-        <button id="disconnectBtn" type="button" class="btn btn-danger me-2">Trennen</button>
+        <button id="disconnectBtn" type="button" class="btn btn-danger me-2">Disconnect</button>
         <button id="darkModeBtn" type="button"
                 class="btn btn-secondary"
                 data-label-light="🌙 Dark Mode"
@@ -38,11 +38,11 @@
       <div class="col-md-12 d-flex justify-content-center">
 
         <form id="setForm" class="d-flex me-2">
-          <input type="number" name="az" min="0" max="359" step="0.1"
+          <input type="number" name="az" min="-360" max="359" step="0.1"
                  value="{{state.az}}" class="form-control me-2" placeholder="Az">
           <input type="number" name="el" min="15" max="90" step="0.1"
                  value="{{state.el}}" class="form-control me-2" placeholder="El">
-          <button type="submit" class="btn btn-primary">Setzen</button>
+          <button type="submit" class="btn btn-primary">Set</button>
         </form>
 
         <div class="btn-group ms-2">
@@ -63,13 +63,14 @@
   <div class="canvas-container">
     <div class="canvas-card text-center">
       <canvas id="azCanvas" width="300" height="300"></canvas>
-      <p id="azText" class="status-text mt-2">Current angle: --°</p>
+      <p id="azText" class="status-text mt-2">Antenna absolute azimuth: --°</p>
+      <p id="azNormText" class="status-text mt-2">Antenna normed azimuth: --°</p>
       <p id="azMoonText" class="moon-text">Moon angle: --°</p>
     </div>
 
     <div class="canvas-card text-center">
       <canvas id="elCanvas" width="300" height="300"></canvas>
-      <p id="elText" class="status-text mt-2">Current angle: --°</p>
+      <p id="elText" class="status-text mt-2">Antenna elevation: --°</p>
       <p id="elMoonText" class="moon-text">Moon angle: --°</p>
     </div>
 
@@ -78,16 +79,32 @@
         <h5 class="mb-0">Antenna Camera</h5>
         <div class="btn-group">
           <button id="camFsBtn" type="button" class="btn btn-outline-info">⛶ Fullscreen</button>
-    </div>
-  </div>
+        </div>
+      </div>
 
-  <!-- Wrap the <img> so we can fullscreen the whole area -->
+
+  <!-- Wrap the <img> for fullscreen -->
   <div id="camFsContainer" class="cam-fs-container">
     <img id="camStream" src="/video.mjpg" alt="Camera stream" class="camera-frame">
+    <div id="camOverlay" class="cam-overlay" hidden>No video signal</div>
+  </div>
+  </div>
+
+<!-- movement buttons-->
+<!-- D-pad -->
+<div class="canvas-card text-center">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h5 class="mb-0">Antenna manual control - INOP</h5>
+    <div class="text-center small">Hold for repeat · Shift = coarse</div>
+  </div>
+
+  <div class="dpad-wrap">
+    <button id="upBtn"    type="button" class="btn btn-primary arrow" aria-label="Jog up">⬆️</button>
+    <button id="leftBtn"  type="button" class="btn btn-primary arrow" aria-label="Jog left">⬅️</button>
+    <button id="rightBtn" type="button" class="btn btn-primary arrow" aria-label="Jog right">➡️</button>
+    <button id="downBtn"  type="button" class="btn btn-primary arrow" aria-label="Jog down">⬇️</button>
   </div>
 </div>
-
-
   <!-- Status bar -->
   <div id="status-bar">{{ state.status }}</div>
 

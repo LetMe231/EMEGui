@@ -75,10 +75,10 @@ body.dark-mode .btn-outline-light {
   color: #fff;
   border-color: #999;
 }
-/* your existing normal layout is fine */
+/* normal layout */
 .camera-frame {
   width: 100%;
-  max-width: 480px;       /* keeps it tidy in normal layout */
+  max-width: 480px; 
   border-radius: 8px;
   border: 1px solid #444;
 }
@@ -106,5 +106,52 @@ body.dark-mode .btn-outline-light {
   object-fit: contain;          /* or 'cover' if you prefer zero borders */
   border: none;
   border-radius: 0;
+}
+
+/* Status bar tokens */
+#status-bar { transition: background 200ms ease, color 200ms ease; }
+.statusbar { position: fixed; bottom: 0; left: 0; width: 100%; padding: 10px;
+  color: #fff; text-align: center; font-weight: bold; }
+.statusbar--info    { background: #6c757d; }   /* gray */
+.statusbar--success { background: #198754; }   /* green */
+.statusbar--warning { background: #fd7e14; }   /* orange */
+.statusbar--error   { background: #dc3545; }   /* red */
+.statusbar--busy    { background: #0d6efd; }   /* blue */
+
+/* D-pad layout */
+.dpad-wrap {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(3, 56px);
+  gap: 12px;                 /* padding between buttons */
+  justify-content: center;   /* center the whole pad */
+  align-items: center;
+}
+
+/* Place each button in the grid */
+#upBtn    { grid-column: 2; grid-row: 1; }
+#leftBtn  { grid-column: 1; grid-row: 2; }
+#rightBtn { grid-column: 3; grid-row: 2; }
+#downBtn  { grid-column: 2; grid-row: 3; }
+
+/* make buttons fill their grid cell nicely */
+.arrow {
+  width: 100%;
+  height: 100%;
+  font-size: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+}
+.arrow.active { outline: 2px solid rgba(13,110,253,.6); }
+
+.cam-fs-container { position: relative; }
+.cam-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.45);
+  color: #fff; font-weight: 700; border-radius: 8px;
+  letter-spacing: .3px;
 }
 

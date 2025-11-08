@@ -88,12 +88,6 @@ class SerialAntenna:
         cmd = self.build_rot2_set_command(az_deg, el_deg)
         ser.reset_input_buffer()
         ser.write(cmd)
-
-    def parking(self):
-        if self.connected:
-            self.send_rot2_set(self.ser, 18, 60)
-        else:
-            raise ConnectionError("Serial port not connected")
         
     def stopMovement(self):
         if self.connected:
@@ -105,7 +99,6 @@ class SerialAntenna:
 
     def close(self):
         if self.connected:
-            self.parking()
             self.ser.close()
         else:
             raise ConnectionError("Serial port not connected")

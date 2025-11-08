@@ -85,7 +85,7 @@ function drawAzimuth(az, azMoon, connected) {
     ctx.setLineDash([]);
 
     // park position pointer
-    let radPark = (285 - 90) * Math.PI / 180;
+    let radPark = (40 - 90) * Math.PI / 180;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(cx + r * Math.cos(radPark), cy + r * Math.sin(radPark));
@@ -240,6 +240,7 @@ async function refreshStatus() {
 
     // DOM refs
     const azText     = document.getElementById("azText");
+    const azNormText = document.getElementById("azNormText");
     const azMoonText = document.getElementById("azMoonText");
     const elText     = document.getElementById("elText");
     const elMoonText = document.getElementById("elMoonText");
@@ -248,8 +249,12 @@ async function refreshStatus() {
 
     // Numbers under canvases
     if (azText) {
-      azText.innerText = data.connected ? `Current angle: ${(+data.az).toFixed(1)}°` : "Current angle: --°";
+      azText.innerText = data.connected ? `Absolute angle: ${(+data.az).toFixed(1)}°` : "Absolute angle: --°";
       azText.style.color = normalText;
+    }
+    if (azNormText) {
+      azNormText.innerText = data.connected ? `Normalized angle: ${(+data.az_norm).toFixed(1)}°` : "Normalized angle: --°";
+      azNormText.style.color = normalText;
     }
     if (azMoonText) {
       azMoonText.innerText = `Moon angle: ${(+data.az_moon).toFixed(1)}°`;
@@ -294,7 +299,7 @@ async function refreshStatus() {
     drawElevation(+data.el, +data.el_moon, !!data.connected);
 
   } catch (e) {
-    updateStatusBar(`Fehler: ${e}`, false);
+    updateStatusBar(`Error: ${e}`, false);
   }
 }
 // ===== DARK MODE SYSTEM =====
@@ -456,3 +461,100 @@ document.addEventListener("DOMContentLoaded", () => {
   refreshStatus();
   setInterval(refreshStatus, 2000);
 });
+
+// --- Status Bar Controller ----------------------------------------------------
+(function () {
+  const bar = document.getElementById("status-bar");
+  if (!bar) return;
+
+  const cls = l => `statusbar statusbar--${l || "info"}`;
+  function setStatus(level, text) {
+    bar.textContent = text;
+    bar.className = cls(level);
+    bar.setAttribute("data-level", level);
+    bar.setAttribute("aria-live", "polite");
+  }
+
+  async function poll() {
+    try {
+      const r = await fetch("/status", { cache: "no-store" });
+      const s = await r.json();
+      setStatus(s.status_level || "info", s.status || "");
+    } catch (e) {
+      setStatus("error", "Lost connection to server");
+    } finally {
+      setTimeout(poll, 1000);
+    }
+  }
+  poll();
+
+  // Optional: optimistic "busy" hint on actions the user triggers
+  const busy = () => setStatus("busy", "Working…");
+  [["connectForm","submit"],["setForm","submit"],
+   ["trackerBtn","click"],["stopBtn","click"],
+   ["parkBtn","click"],["disconnectBtn","click"]]
+   .forEach(([id, evt]) => {
+     const el = document.getElementById(id);
+     if (!el) return;
+     el.addEventListener(evt, busy, { capture: true });
+   });
+
+  // Optional: surface network/HTTP errors globally
+  const _fetch = window.fetch;
+  window.fetch = async (...args) => {
+    try {
+      const res = await _fetch(...args);
+      if (!res.ok) setStatus("error", `HTTP ${res.status} ${res.statusText}`);
+      return res;
+    } catch (e) {
+      setStatus("error", `Network error: ${e.message}`);
+      throw e;
+    }
+  };
+})();
+
+// --- Camera health / overlay --------------------------------------------------
+(() => {
+  const img = document.getElementById("camStream");
+  const overlay = document.getElementById("camOverlay");
+  if (!img || !overlay) return;
+
+  let lastReload = 0;
+
+  function showOverlay(on) { overlay.hidden = !on; }
+
+  img.addEventListener("error", () => {
+    showOverlay(true);
+    // throttle reloads
+    const now = Date.now();
+    if (now - lastReload > 4000) {
+      lastReload = now;
+      // cache-bust so the browser re-requests the stream
+      img.src = "/video.mjpg?ts=" + Date.now();
+    }
+  });
+
+  img.addEventListener("load", () => {
+    // When an mjpeg stream loads, 'load' fires once. We still poll health below.
+    showOverlay(false);
+  });
+
+  async function pollCam() {
+    try {
+      const r = await fetch("/camera/health", { cache: "no-store" });
+      const j = await r.json();
+      const ok = r.ok && (j.has_frame || j.last_frame_age !== null);
+      showOverlay(!ok);
+      // if unhealthy, nudge the <img> to reconnect every few seconds
+      if (!ok && Date.now() - lastReload > 4000) {
+        lastReload = Date.now();
+        img.src = "/video.mjpg?ts=" + Date.now();
+      }
+    } catch {
+      showOverlay(true);
+    } finally {
+      setTimeout(pollCam, 2000);
+    }
+  }
+  pollCam();
+})();
