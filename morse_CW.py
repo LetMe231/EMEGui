@@ -80,7 +80,7 @@ if __name__ == "__main__":
     closest_time = (moon_closest/c) * 2
     print(closest_time)
 
-    fs = 2000000  # samples per second
+    fs = 200000  # samples per second
     wpm = 700  # words per minute
     snr =  80 # target snr
     msg = 'HB9HSR DE HB9HSR AR BT EME RANGE MOON BT RTT MEASUREMENT ONLY BT NO REPLY PSE BT EXPERIMENTAL TX BT TNX BT HB9HSR AR SK' # message
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     # noisy_morse, noise = add_noise((morse+1)/2, snr)
 
     morse1, length1 = set_text(50, 'HB9HSR T', fs)
-    noisy_morse1, noise1 = add_noise((morse1+1)/2, snr)
+    # noisy_morse1, noise1 = add_noise((morse1+1)/2, snr)
 
     # morse2, length2 = set_text(100, 'HB9HSR TEST AR SK', fs)
     # noisy_morse2, noise2 = add_noise((morse2+1)/2, snr)
@@ -102,9 +102,9 @@ if __name__ == "__main__":
 
 
     
-    save_path = r'C:\Users\yves.looser\OneDrive - OST\Dokumente/binforMorse.bin'  # <- change this
+    save_path = r'C:\Users\yves.looser\OneDrive - OST\Dokumente/binforMorse.bin'  
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    ((morse1+1)/2).astype('<f4').ravel().tofile(save_path)
+    (morse1).astype('<f4').ravel().tofile(save_path)
     print('Saved to:', save_path)
     print(len(morse1))
     
