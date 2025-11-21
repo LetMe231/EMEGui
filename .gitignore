@@ -5,3 +5,5 @@ __pycache__/camera.cpython-313.pyc
 __pycache__/CalcMoonPos.cpython-311.pyc
 __pycache__/serialComm.cpython-311.pyc
 __pycache__/camera.cpython-311.pyc
+.env
+__pycache__/serialSwitch.cpython-313.pyc

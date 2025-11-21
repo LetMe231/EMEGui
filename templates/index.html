@@ -1,17 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>MD-01 Controller</title>
 
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <!-- Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
 
   <!-- Custom styles -->
   <link href="/static/style.css" rel="stylesheet">
 </head>
 
-<body class="app-body text-center">
+<body class="app-body text-center" data-can-edit="{{ '1' if can_edit else '0' }}">
 
   <div class="app-shell container-fluid py-3">
 
@@ -24,17 +29,34 @@
           </div>
           <div class="text-start">
             <h1 class="h4 mb-0 fw-bold">MD-01 Controller</h1>
-            <small class="text-muted d-block">Moon tracking & antenna control</small>
+            <small class="text-muted d-block">Moon tracking &amp; antenna control</small>
           </div>
         </div>
 
         <div class="d-flex align-items-center gap-2">
-          <button id="darkModeBtn" type="button"
-                  class="btn btn-outline-light btn-sm dark-toggle"
-                  data-label-light="🌙 Dark Mode"
-                  data-label-dark="☀️ Light Mode">
-            🌙 Dark Mode
-          </button>
+          <form method="post" action="/login" class="d-flex align-items-center gap-2">
+            {% if can_edit %}
+              <span class="badge bg-success-subtle text-success-emphasis">Control enabled</span>
+              <button
+                type="submit"
+                formaction="/logout"
+                class="btn btn-outline-danger btn-sm"
+              >
+                Logout
+              </button>
+            {% else %}
+              <input
+                type="password"
+                name="password"
+                class="form-control form-control-sm"
+                placeholder="Control password"
+                autocomplete="current-password"
+              >
+              <button type="submit" class="btn btn-outline-success btn-sm">
+                Login
+              </button>
+            {% endif %}
+          </form>
         </div>
       </div>
     </header>
@@ -54,14 +76,24 @@
               <form id="connectForm" class="d-flex gap-2 mb-2">
                 <select name="port" class="form-select form-select-sm">
                   {% for p in ports %}
-                    <option value="{{p}}" {% if state.port == p %}selected{% endif %}>{{p}}</option>
+                    <option value="{{ p }}" {% if state.port == p %}selected{% endif %}>{{ p }}</option>
                   {% endfor %}
                 </select>
-                <button type="submit" class="btn btn-success btn-sm flex-shrink-0">Connect</button>
+                <button
+                  type="submit"
+                  class="btn btn-success btn-sm flex-shrink-0"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  Connect
+                </button>
               </form>
-
               <div class="d-flex gap-2 justify-content-between">
-                <button id="disconnectBtn" type="button" class="btn btn-outline-danger btn-sm flex-fill">
+                <button
+                  id="disconnectBtn"
+                  type="button"
+                  class="btn btn-outline-danger btn-sm flex-fill"
+                  {% if not can_edit %}disabled{% endif %}
+                >
                   Disconnect
                 </button>
                 <div class="small text-muted text-start">
@@ -87,31 +119,79 @@
                 <form id="setForm" class="d-flex flex-wrap flex-md-nowrap gap-2 flex-grow-1">
                   <div class="input-group input-group-sm">
                     <span class="input-group-text">Az</span>
-                    <input type="number" name="az" min="-360" max="359" step="0.1"
-                           value="{{state.az}}" class="form-control" placeholder="Azimuth">
+                    <input
+                      type="number"
+                      name="az"
+                      min="-360"
+                      max="359"
+                      step="0.1"
+                      value="{{ state.az }}"
+                      class="form-control"
+                      placeholder="Azimuth"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
                   </div>
                   <div class="input-group input-group-sm">
                     <span class="input-group-text">El</span>
-                    <input type="number" name="el" min="0" max="90" step="0.1"
-                           value="{{state.el}}" class="form-control" placeholder="Elevation">
+                    <input
+                      type="number"
+                      name="el"
+                      min="0"
+                      max="90"
+                      step="0.1"
+                      value="{{ state.el }}"
+                      class="form-control"
+                      placeholder="Elevation"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
                   </div>
-                  <button type="submit" class="btn btn-primary btn-sm flex-shrink-0">
+                  <button
+                    type="submit"
+                    class="btn btn-primary btn-sm flex-shrink-0"
+                    {% if not can_edit %}disabled{% endif %}
+                  >
                     Set
                   </button>
                 </form>
 
                 <div class="d-flex align-items-center gap-2 ms-md-2">
                   <div class="btn-group btn-group-sm" role="group">
-                    <button id="trackerBtn" type="button" class="btn btn-success">Tracker Start</button>
-                    <button id="stopBtn" type="button" class="btn btn-warning">Stop</button>
-                    <button id="parkBtn" type="button" class="btn btn-info">Park</button>
+                    <button
+                      id="trackerBtn"
+                      type="button"
+                      class="btn btn-success"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      Tracker Start
+                    </button>
+                    <button
+                      id="stopBtn"
+                      type="button"
+                      class="btn btn-warning"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      Stop
+                    </button>
+                    <button
+                      id="parkBtn"
+                      type="button"
+                      class="btn btn-info"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      Park
+                    </button>
                   </div>
                 </div>
               </div>
 
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="form-check form-switch small">
-                  <input class="form-check-input" type="checkbox" id="forceTrackChk">
+                  <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="forceTrackChk"
+                    {% if not can_edit %}disabled{% endif %}
+                  >
                   <label class="form-check-label" for="forceTrackChk">
                     Force tracking below 15°
                   </label>
@@ -174,17 +254,22 @@
             <div class="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3">
               <span class="fw-semibold">Antenna Camera</span>
               <div class="btn-group btn-group-sm">
-                <button id="camFsBtn" type="button" class="btn btn-outline-info">⛶ Fullscreen</button>
+                <button id="camFsBtn" type="button" class="btn btn-outline-info">
+                  ⛶ Fullscreen
+                </button>
               </div>
             </div>
 
             <div class="card-body">
               <div id="camFsContainer" class="cam-fs-container rounded overflow-hidden position-relative">
                 <!-- IMPORTANT: src="/video.mjpg" directly -->
-                <img id="camStream"
-                    src="/video.mjpg"
-                    alt="Camera stream"
-                    class="camera-frame w-100">
+                <img
+                  id="camStream"
+                  src=""
+                  data-src="/video.mjpg"
+                  alt="Camera stream"
+                  class="camera-frame w-100"
+                >
 
                 <!-- Overlay controlled by JS -->
                 <div id="camOverlay" class="cam-overlay" hidden>
@@ -213,11 +298,44 @@
 
               <!-- D-pad -->
               <div class="dpad-wrap">
-                <button id="upBtn"    type="button" class="btn btn-outline-primary arrow" aria-label="Jog up">⬆️</button>
-                <button id="leftBtn"  type="button" class="btn btn-outline-primary arrow" aria-label="Jog left">⬅️</button>
-                <button id="rightBtn" type="button" class="btn btn-outline-primary arrow" aria-label="Jog right">➡️</button>
-                <button id="downBtn"  type="button" class="btn btn-outline-primary arrow" aria-label="Jog down">⬇️</button>
+                <button
+                  id="upBtn"
+                  type="button"
+                  class="btn btn-outline-primary arrow"
+                  aria-label="Jog up"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  ⬆️
+                </button>
+                <button
+                  id="leftBtn"
+                  type="button"
+                  class="btn btn-outline-primary arrow"
+                  aria-label="Jog left"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  ⬅️
+                </button>
+                <button
+                  id="rightBtn"
+                  type="button"
+                  class="btn btn-outline-primary arrow"
+                  aria-label="Jog right"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  ➡️
+                </button>
+                <button
+                  id="downBtn"
+                  type="button"
+                  class="btn btn-outline-primary arrow"
+                  aria-label="Jog down"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  ⬇️
+                </button>
               </div>
+
               <hr class="my-2">
 
               <!-- Coax switches -->
@@ -235,26 +353,69 @@
                 <div class="coax-row">
                   <span class="coax-label">S1</span>
                   <div class="btn-group btn-group-sm">
-                    <button onclick="setCoax(1,'A')" id="coax-1-A" type="button" class="btn btn-outline-light">A</button>
-                    <button onclick="setCoax(1,'B')" id="coax-1-B" type="button" class="btn btn-outline-light">B</button>
+                    <button
+                      id="coax-1-1"
+                      class="btn btn-outline-light coax-btn"
+                      onclick="setCoax(1,'1')"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      1
+                    </button>
+                    <button
+                      id="coax-1-2"
+                      class="btn btn-outline-light coax-btn"
+                      onclick="setCoax(1,'2')"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      2
+                    </button>
                   </div>
                 </div>
+
                 <div class="coax-row">
                   <span class="coax-label">S2</span>
                   <div class="btn-group btn-group-sm">
-                    <button onclick="setCoax(2,'A')" id="coax-2-A" type="button" class="btn btn-outline-light">A</button>
-                    <button onclick="setCoax(2,'B')" id="coax-2-B" type="button" class="btn btn-outline-light">B</button>
+                    <button
+                      id="coax-2-1"
+                      class="btn btn-outline-light coax-btn"
+                      onclick="setCoax(2,'1')"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      1
+                    </button>
+                    <button
+                      id="coax-2-2"
+                      class="btn btn-outline-light coax-btn"
+                      onclick="setCoax(2,'2')"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      2
+                    </button>
                   </div>
                 </div>
+
                 <div class="coax-row">
                   <span class="coax-label">S3</span>
                   <div class="btn-group btn-group-sm">
-                    <button onclick="setCoax(3,'A')" id="coax-3-A" type="button" class="btn btn-outline-light">A</button>
-                    <button onclick="setCoax(3,'B')" id="coax-3-B" type="button" class="btn btn-outline-light">B</button>
+                    <button
+                      id="coax-3-1"
+                      class="btn btn-outline-light coax-btn"
+                      onclick="setCoax(3,'1')"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      1
+                    </button>
+                    <button
+                      id="coax-3-2"
+                      class="btn btn-outline-light coax-btn"
+                      onclick="setCoax(3,'2')"
+                      {% if not can_edit %}disabled{% endif %}
+                    >
+                      2
+                    </button>
                   </div>
                 </div>
               </div>
-
 
             </div>
           </div>
@@ -270,7 +431,7 @@
     {{ state.status }}
   </div>
 
-  <!-- Your JS bundle (everything you pasted lives here) -->
+  <!-- JS bundle -->
   <script src="/static/app.js"></script>
 </body>
 </html>

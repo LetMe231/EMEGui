@@ -202,6 +202,8 @@ function drawElevation(el, elMoon, connected) {
 }
 
 // ==================== Status & AJAX ====================
+window.APP_CAN_EDIT = document.body.dataset.canEdit === "1";
+
 function updateStatusBar(text, success, levelOverride) {
   const statusBar = document.getElementById("status-bar");
   if (!statusBar) return;
@@ -237,7 +239,6 @@ async function refreshStatus() {
   try {
     const res = await fetch("/status");
     const data = await res.json();
-    await pollCoax();
 
     updateStatusBar(data.status, data.connected);
     
@@ -379,11 +380,11 @@ function setTheme(dark) {
 
 // ===== INIT & EVENT WIRING (single block) =====
 document.addEventListener("DOMContentLoaded", () => {
-  // Fullscreen toggle for camera
   const camFsBtn = document.getElementById("camFsBtn");
   const camFsContainer = document.getElementById("camFsContainer");
   const camImg = document.getElementById("camStream");
 
+  // Start MJPEG stream only after the page has fully loaded
   if (camImg) {
     window.addEventListener("load", () => {
       if (!camImg.src) {
@@ -525,39 +526,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let lastReload = 0;
 
-  function showOverlay(on) { overlay.hidden = !on; }
+  function showOverlay(on) {
+    overlay.hidden = !on;
+  }
 
   img.addEventListener("error", () => {
     showOverlay(true);
-    // throttle reloads
     const now = Date.now();
     if (now - lastReload > 4000) {
       lastReload = now;
-      // cache-bust so the browser re-requests the stream
-      img.src = "/video.mjpg?ts=" + Date.now();
+      img.src = (img.dataset.src || "/video.mjpg") + "?ts=" + Date.now();
     }
   });
 
   img.addEventListener("load", () => {
-    // When an mjpeg stream loads, 'load' fires once. We still poll health below.
     showOverlay(false);
   });
 
   async function pollCam() {
-    if (!img.src) {
-      showOverlay(true);
-      setTimeout(pollCam, 2000);
-      return;
-    }
     try {
       const r = await fetch("/camera/health", { cache: "no-store" });
       const j = await r.json();
-      const ok = r.ok && (j.has_frame || j.last_frame_age !== null);
-      showOverlay(!ok);
-      // if unhealthy, nudge the <img> to reconnect every few seconds
-      if (!ok && Date.now() - lastReload > 4000) {
-        lastReload = Date.now();
-        img.src = "/video.mjpg?ts=" + Date.now();
+      const ok = r.ok && j.running && (j.has_frame || j.last_frame_age !== null);
+
+      if (ok) {
+        showOverlay(false);
+        if (!img.src || !img.src.includes("/video.mjpg")) {
+          img.src = (img.dataset.src || "/video.mjpg") + "?ts=" + Date.now();
+        }
+      } else {
+        showOverlay(true);
+        if (Date.now() - lastReload > 4000) {
+          lastReload = Date.now();
+          img.src = (img.dataset.src || "/video.mjpg") + "?ts=" + Date.now();
+        }
       }
     } catch {
       showOverlay(true);
@@ -565,76 +567,211 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(pollCam, 2000);
     }
   }
+
   pollCam();
 })();
 
-function updateCoaxButtonsFromState(stateStr) {
-  // Clear existing highlights
-  for (let sid = 1; sid <= 3; sid++) {
-    ["1", "2"].forEach(side => {
-      const btn = document.getElementById(`coax-${sid}-${side}`);
-      if (btn) btn.classList.remove("coax-btn-active");
-    });
-  }
-
-  if (!stateStr || typeof stateStr !== "string") return;
-
-  // Expect e.g. "STATE S1=A S2=B S3=B"
-  const matches = stateStr.match(/S[1-3]=[12]/g);
-  if (!matches) return;
-
-  matches.forEach(chunk => {
-    const m = chunk.match(/S([1-3])=([12])/);
-    if (!m) return;
-    const sid = m[1];
-    const side = m[2];
-    const btn = document.getElementById(`coax-${sid}-${side}`);
-    if (btn) btn.classList.add("coax-btn-active");
-  });
-}
-
 // Pico relais switches
 async function setCoax(sid, side) {
+  // If UI is read-only, ignore clicks entirely
+  if (!window.APP_CAN_EDIT) {
+    return;
+  }
+
   try {
     const r = await fetch(`/coax/${sid}/${side}`, { method: "POST" });
-    if (!r.ok) {
-      updateStatusBar(`Coax S${sid} → ${side} failed (HTTP ${r.status})`, false);
+    const j = await r.json().catch(() => ({}));
+
+    if (!r.ok || j.success === false) {
+      const msg = j.error || j.status || `Coax S${sid} → ${side} failed`;
+      updateStatusBar(msg, false);
       return;
     }
-    const j = await r.json();
-    updateStatusBar(j.status || `Coax S${sid} → ${side}`, j.success !== false);
-    await pollCoax();
+
+    updateStatusBar(j.status || `Coax S${sid} → ${side}`, true);
+    // Re-poll to update button highlight
+    pollCoax();
   } catch (e) {
     updateStatusBar(`Coax error: ${e}`, false);
   }
 }
 
-async function pollCoax() {
-  const dot = document.getElementById("coax-conn-dot");
-  const txt = document.getElementById("coax-conn-text");
+function updateCoaxButtonsFromState(switches, connected) {
+  // Reset / disable everything first
+  for (let sid = 1; sid <= 3; sid++) {
+    ["1", "2"].forEach((side) => {
+      const btn = document.getElementById(`coax-${sid}-${side}`);
+      if (!btn) return;
+      btn.disabled = !connected || !window.APP_CAN_EDIT;
+      btn.classList.remove("coax-btn-active");
+    });
+  }
 
+  if (!connected || !switches) return;
+
+  // switches is e.g. { "S1": "1", "S2": "2", "S3": "1" }
+  Object.entries(switches).forEach(([key, val]) => {
+    if (!val) return;
+    const sid = key.replace("S", "");
+    const btn = document.getElementById(`coax-${sid}-${val}`);
+    if (btn) btn.classList.add("coax-btn-active");
+  });
+}
+
+async function pollCoax() {
   try {
-    const r = await fetch(`/coax/status`, { cache: "no-store" });
+    const r = await fetch("/coax/status", { cache: "no-store" });
     const j = await r.json();
 
-    const isOnline = r.ok && j.connected;
+    const connected = !!j.connected;
+    const switches = j.switches || {};
 
-    if (dot) {
-      if (isOnline) dot.classList.add("online");
-      else dot.classList.remove("online");
-    }
-    if (txt) {
-      txt.textContent = isOnline ? "Online" : "Offline";
+    // Build a nice summary like "S1=1 · S2=2 · S3=1"
+    const parts = [];
+    ["S1", "S2", "S3"].forEach((k) => {
+      const v = switches[k];
+      if (v !== undefined && v !== null && v !== "") {
+        parts.push(`${k}=${v}`);
+      }
+    });
+    const summary = parts.length ? " — " + parts.join(" · ") : "";
+
+    // Main status line in the card body
+    const statusEl = document.getElementById("coax-status");
+    if (statusEl) {
+      if (connected) {
+        // e.g. "Pico switch: online — S1=1 · S2=2 · S3=1"
+        statusEl.textContent = "Pico switch: online" + summary;
+        statusEl.classList.remove("text-danger");
+        statusEl.classList.add("text-success");
+      } else {
+        statusEl.textContent = "Pico switch: offline";
+        statusEl.classList.remove("text-success");
+        statusEl.classList.add("text-danger");
+      }
     }
 
-    const el = document.getElementById("coax-status");
-    if (el) el.innerText = j.state || "";
-
-    if (j.state) {
-      updateCoaxButtonsFromState(j.state);
+    // Header indicator ("Coax Switches ● Online/Offline")
+    const connDot  = document.getElementById("coax-conn-dot");
+    const connText = document.getElementById("coax-conn-text");
+    if (connDot) {
+      if (connected) {
+        connDot.classList.add("online");
+      } else {
+        connDot.classList.remove("online");
+      }
     }
+    if (connText) {
+      connText.textContent = connected ? "Online" : "Offline";
+    }
+
+    // Buttons (only exist on control page; view page just ignores this)
+    updateCoaxButtonsFromState(switches, connected);
   } catch (e) {
-    if (dot) dot.classList.remove("online");
-    if (txt) txt.textContent = "Offline";
+    const statusEl = document.getElementById("coax-status");
+    if (statusEl) {
+      statusEl.textContent = "Pico switch: offline";
+      statusEl.classList.remove("text-success");
+      statusEl.classList.add("text-danger");
+    }
+
+    const connDot  = document.getElementById("coax-conn-dot");
+    const connText = document.getElementById("coax-conn-text");
+    if (connDot) connDot.classList.remove("online");
+    if (connText) connText.textContent = "Offline";
+
+    updateCoaxButtonsFromState({}, false);
+  }
+}
+
+
+
+// keep polling
+setInterval(pollCoax, 2000);
+pollCoax();
+
+async function pollCoax() {
+  try {
+    const r = await fetch("/coax/status", { cache: "no-store" });
+    const j = await r.json();
+
+    const connected = !!j.connected;
+    const switches = j.switches || {};
+
+    // -------- Main status line inside card body --------
+    const statusEl = document.getElementById("coax-status");
+    if (statusEl) {
+      if (connected) {
+        statusEl.textContent = "Pico switch: online";
+        statusEl.classList.remove("text-danger");
+        statusEl.classList.add("text-success");
+      } else {
+        statusEl.textContent = "Pico switch: offline";
+        statusEl.classList.remove("text-success");
+        statusEl.classList.add("text-danger");
+      }
+    }
+
+    // -------- Header indicator ("Coax Switches ● Online/Offline") --------
+    const connDot  = document.getElementById("coax-conn-dot");
+    const connText = document.getElementById("coax-conn-text");
+    if (connDot) {
+      if (connected) {
+        connDot.classList.add("online");
+      } else {
+        connDot.classList.remove("online");
+      }
+    }
+    if (connText) {
+      connText.textContent = connected ? "Online" : "Offline";
+    }
+
+    // -------- Control-page buttons (if present) --------
+    updateCoaxButtonsFromState(switches, connected);
+
+    // -------- Read-only pills (view page) --------
+    ["1", "2", "3"].forEach((sid) => {
+      const current = switches["S" + sid];
+
+      ["1", "2"].forEach((side) => {
+        const pill = document.getElementById(`coax-view-${sid}-${side}`);
+        if (!pill) return;
+
+        // Clear previous state
+        pill.classList.remove("coax-pill--active-1", "coax-pill--active-2");
+
+        // Highlight only when connected and this is the active side
+        if (connected && current === side) {
+          pill.classList.add(
+            side === "1" ? "coax-pill--active-1" : "coax-pill--active-2"
+          );
+        }
+      });
+    });
+
+  } catch (e) {
+    const statusEl = document.getElementById("coax-status");
+    if (statusEl) {
+      statusEl.textContent = "Pico switch: offline";
+      statusEl.classList.remove("text-success");
+      statusEl.classList.add("text-danger");
+    }
+
+    const connDot  = document.getElementById("coax-conn-dot");
+    const connText = document.getElementById("coax-conn-text");
+    if (connDot) connDot.classList.remove("online");
+    if (connText) connText.textContent = "Offline";
+
+    // Clear read-only pills
+    ["1", "2", "3"].forEach((sid) => {
+      ["1", "2"].forEach((side) => {
+        const pill = document.getElementById(`coax-view-${sid}-${side}`);
+        if (pill) {
+          pill.classList.remove("coax-pill--active-1", "coax-pill--active-2");
+        }
+      });
+    });
+
+    updateCoaxButtonsFromState({}, false);
   }
 }

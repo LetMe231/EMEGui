@@ -369,3 +369,41 @@ section {
     padding-inline: 8px;
   }
 }
+
+/* Read-only coax pills (data view) */
+.coax-grid-readonly .coax-row {
+  gap: 0.5rem;
+}
+
+.coax-pill-group {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.coax-pill {
+  min-width: 1.6rem;
+  padding: 0.08rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(6px);
+}
+
+/* Active position colors: 1 = blue-ish, 2 = red-ish */
+.coax-pill--active-1 {
+  background: var(--accent-soft);
+  color: #e5f9ff;
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(25, 198, 255, 0.7);
+}
+
+.coax-pill--active-2 {
+  background: var(--danger-soft);
+  color: #fee2e2;
+  border-color: #f97373;
+  box-shadow: 0 0 10px rgba(248, 113, 113, 0.7);
+}

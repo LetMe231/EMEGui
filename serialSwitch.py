@@ -1,133 +1,158 @@
-# serialSwitch.py
-import serial
+"""
+SerialSwitch driver for the Raspberry Pi Pico coax switch.
+
+Protocol (examples):
+    SET S1_1
+    SET S2_2
+    STATUS  -> "STATE S1=1 S2=2 S3=1"
+"""
+
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
+
+import serial
 
 
 class SerialSwitch:
     """
-    Tiny driver for the coax Pico.
+    Small wrapper around a Pico-based coax switch on a serial port.
 
-    Protocol:
-      - SET S1_1 / SET S1_2 / SET S2_1 / ...
-      - STATUS  -> e.g. 'STATE S1=1 S2=2 S3=2'
+    Attributes
+    ----------
+    port : str
+        Serial port (e.g. "COM4", "/dev/ttyACM0", ...)
+    ser : serial.Serial | None
+        Underlying pyserial object.
+    connected : bool
+        True if the last operation succeeded and the port appears healthy.
     """
 
-    def __init__(self, port: str, baudrate: int = 115200, timeout: float = 1.0):
+    def __init__(
+        self,
+        port: str,
+        baudrate: int = 115200,
+        timeout: float = 0.2,   # faster default timeout
+    ) -> None:
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
         self.ser: Optional[serial.Serial] = None
         self.connected: bool = False
 
-        self._open_port()
+        self._open()
 
-    # ---------- low-level ----------
+    # --------------------------------------------------------------------- #
+    # Low-level helpers
+    # --------------------------------------------------------------------- #
 
-    def _open_port(self):
+    def _open(self) -> None:
+        """(Re)open the serial port."""
+        self.close()
         try:
-            self.ser = serial.Serial(
-                self.port,
-                self.baudrate,
-                timeout=self.timeout
-            )
-            # give Pico a moment to reset
-            time.sleep(2)
-            self.connected = True
-        except serial.SerialException as e:
-            print(f"[SerialSwitch] Failed to open {self.port}: {e}")
+            self.ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
+            # Small settle time; 2s was killing responsiveness.
+            time.sleep(0.1)
+            self.connected = self.ser.is_open
+        except Exception as exc:  # noqa: BLE001
             self.ser = None
             self.connected = False
+            raise RuntimeError(f"SerialSwitch: failed to open {self.port}: {exc}") from exc
 
     def _send_raw(self, cmd: str) -> str:
         """
-        Send a raw command and return a single line as string.
-        Returns "" on error / not connected.
+        Send a single command line and return the reply as a stripped string.
+
+        Raises RuntimeError if the port is not open or I/O fails.
         """
-        if not self.connected or self.ser is None:
-            print("[SerialSwitch] _send_raw called while not connected")
-            return ""
+        if not (self.ser and self.ser.is_open):
+            self.connected = False
+            raise RuntimeError("SerialSwitch: port is not open")
 
         try:
             self.ser.reset_input_buffer()
-            self.ser.write((cmd.strip() + "\n").encode())
+            self.ser.write((cmd.strip() + "\n").encode("ascii", errors="ignore"))
             self.ser.flush()
             line = self.ser.readline().decode(errors="ignore").strip()
-            if not line:
-                # treat empty as “not really talking to us”
-                self.connected = False
+            self.connected = True
             return line
-        except serial.SerialException as e:
-            print(f"[SerialSwitch] Serial error while sending '{cmd}': {e}")
+        except Exception as exc:  # noqa: BLE001
+            # Mark as disconnected; caller (ensure_switch_connected) can retry.
             self.connected = False
-            return ""
+            raise RuntimeError(f"SerialSwitch I/O error: {exc}") from exc
 
-    # ---------- public API (backwards compatible) ----------
+    # --------------------------------------------------------------------- #
+    # High-level API
+    # --------------------------------------------------------------------- #
 
     def set(self, sid: int, side: str) -> str:
         """
-        Set switch S{sid} to side '1' or '2'.
-        Returns raw response string.
+        Set switch S1/S2/S3 to position "1" or "2".
+
+        Examples:
+            set(1, "1")  ->  "SET S1_1"
+            set(2, "2")  ->  "SET S2_2"
         """
-        side = side.upper()
+        side = str(side).strip()
+        if sid not in (1, 2, 3):
+            raise ValueError("sid must be 1, 2, or 3")
         if side not in ("1", "2"):
             raise ValueError("side must be '1' or '2'")
+
         cmd = f"SET S{sid}_{side}"
         return self._send_raw(cmd)
 
     def status(self) -> str:
         """
-        Backwards-compatible: return raw STATUS line as string.
+        Query raw status string from the Pico.
+
+        Typical response:
+            "STATE S1=1 S2=2 S3=1"
         """
         return self._send_raw("STATUS")
 
-    # Extra helper: parsed view for the web API
-    def status_parsed(self) -> Dict:
+    def status_parsed(self) -> Dict[str, Any]:
         """
-        Return parsed status:
+        Return a parsed view of the STATUS response.
 
-        {
-          "raw": "STATE S1=1 S2=2 S3=2",
-          "switches": {"S1": "1", "S2": "2", "S3": "2"},
-          "connected": True/False
+        Returns dict:
+            {
+              "connected": bool,
+              "raw": "STATE S1=1 S2=2 S3=1",
+              "switches": {"S1": "1", "S2": "2", "S3": "1"}
+            }
+        """
+        raw = self.status().strip()
+
+        switches: Dict[str, Optional[str]] = {
+            "S1": None,
+            "S2": None,
+            "S3": None,
         }
-        """
-        raw = self.status()
-        switches: Dict[str, str] = {}
 
-        if raw:
-            parts = raw.split()
-            # Expect: ["STATE", "S1=1", "S2=2", "S3=2"]
-            for p in parts:
-                if p.startswith("S") and "=" in p:
-                    sid, side = p.split("=", 1)
-                    sid = sid.strip()
-                    side = side.strip().upper()
-                    if side in ("1", "2"):
-                        switches[sid] = side
+        # Example raw: "STATE S1=1 S2=2 S3=1"
+        for token in raw.split():
+            if token.startswith("S") and "=" in token:
+                key, val = token.split("=", 1)
+                if key in switches:
+                    switches[key] = val
 
-        # connected=True only if the port is open, driver thinks connected,
-        # and we actually got *some* response
-        is_connected = bool(self.connected and raw)
+        # Consider it connected if it looks like a valid STATE line,
+        # or if at least one switch value was parsed.
+        connected = raw.startswith("STATE") or any(v is not None for v in switches.values())
 
         return {
+            "connected": connected,
             "raw": raw,
             "switches": switches,
-            "connected": is_connected,
         }
 
-    def close(self):
-        if self.ser and self.ser.is_open:
+    def close(self) -> None:
+        """Close the serial port, if open."""
+        if self.ser is not None:
             try:
-                self.ser.close()
-            except serial.SerialException:
+                if self.ser.is_open:
+                    self.ser.close()
+            except Exception:
+                # We don't care if close fails during shutdown.
                 pass
         self.connected = False
-
-    def __enter__(self):
-        if not self.connected:
-            self._open_port()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
