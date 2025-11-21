@@ -202,30 +202,32 @@ function drawElevation(el, elMoon, connected) {
 }
 
 // ==================== Status & AJAX ====================
-function updateStatusBar(text, success) {
+function updateStatusBar(text, success, levelOverride) {
   const statusBar = document.getElementById("status-bar");
   if (!statusBar) return;
 
-  statusBar.innerText = text;
-  const isDark = isDarkMode();
+  statusBar.innerText = text || "";
 
-  if (isDark) {
-    statusBar.style.backgroundColor = "#000";
-    if (text.toLowerCase().includes("tracking")) {
-      statusBar.style.color = "orange";
+  // Decide visual level
+  let level = levelOverride;
+  const t = (text || "").toLowerCase();
+
+  if (!level) {
+    if (t.includes("error") || t.includes("failed") || success === false) {
+      level = "error";
+    } else if (t.includes("tracking") || t.includes("working")) {
+      level = "busy";
+    } else if (success === true) {
+      level = "ok";
     } else {
-      statusBar.style.color = success ? "limegreen" : "red";
-    }
-  } else {
-    if (text.toLowerCase().includes("tracking")) {
-      statusBar.style.backgroundColor = "orange";
-      statusBar.style.color = "black";
-    } else {
-      statusBar.style.backgroundColor = success ? "green" : "red";
-      statusBar.style.color = "white";
+      level = "info";
     }
   }
+
+  statusBar.setAttribute("data-level", level);
+  statusBar.className = `statusbar statusbar--${level}`;
 }
+
 
 async function refreshStatus() {
   const isDark = isDarkMode();
@@ -235,8 +237,53 @@ async function refreshStatus() {
   try {
     const res = await fetch("/status");
     const data = await res.json();
+    await pollCoax();
 
     updateStatusBar(data.status, data.connected);
+    
+    // ----- Connection card UI -----
+    const connDot        = document.getElementById("connection-dot");
+    const connStatusText = document.getElementById("connection-status-text");
+    const connPortText   = document.getElementById("connection-port-text");
+    const connectBtn     = document.querySelector("#connectForm button[type='submit']");
+    const disconnectBtn  = document.getElementById("disconnectBtn");
+    const portSelect     = document.querySelector("#connectForm select[name='port']");
+
+    // Dot: red/green
+    if (connDot) {
+      if (data.connected) {
+        connDot.classList.remove("offline");
+      } else {
+        connDot.classList.add("offline");
+      }
+    }
+
+    // Status label in the card
+    if (connStatusText) {
+      if (typeof data.connected === "boolean") {
+        connStatusText.textContent = data.connected ? "Connected" : "Disconnected";
+      } else {
+        connStatusText.textContent = data.status || "Idle";
+      }
+    }
+
+    // Port text + dropdown selection, if backend exposes it
+    if (connPortText) {
+      connPortText.textContent = data.port || "—";
+    }
+    if (portSelect && data.port) {
+      portSelect.value = data.port;
+    }
+
+    // Enable / disable buttons based on connection state
+    if (connectBtn) {
+      connectBtn.disabled = !!data.connected;        // disable when connected
+    }
+    if (disconnectBtn) {
+      disconnectBtn.disabled = !data.connected;      // disable when not connected
+    }
+
+
 
     // DOM refs
     const azText     = document.getElementById("azText");
@@ -279,7 +326,7 @@ async function refreshStatus() {
       const forced  = forceChk && forceChk.checked;
       const canTrack = !!data.connected && (!moonLow || forced);
 
-      trackerBtn.disabled = !canTrack;
+      // trackerBtn.disabled = !canTrack;
       trackerBtn.title = !canTrack ? "Moon below 15° — tracking paused" : "";
 
       // Reflect backend tracking state in button text/color
@@ -336,6 +383,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const camFsBtn = document.getElementById("camFsBtn");
   const camFsContainer = document.getElementById("camFsContainer");
   const camImg = document.getElementById("camStream");
+
+  if (camImg) {
+    window.addEventListener("load", () => {
+      if (!camImg.src) {
+        camImg.src = camImg.dataset.src || "/video.mjpg";
+      }
+    });
+  }
 
   async function toggleCamFullscreen() {
     try {
@@ -462,57 +517,6 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(refreshStatus, 2000);
 });
 
-// --- Status Bar Controller ----------------------------------------------------
-(function () {
-  const bar = document.getElementById("status-bar");
-  if (!bar) return;
-
-  const cls = l => `statusbar statusbar--${l || "info"}`;
-  function setStatus(level, text) {
-    bar.textContent = text;
-    bar.className = cls(level);
-    bar.setAttribute("data-level", level);
-    bar.setAttribute("aria-live", "polite");
-  }
-
-  async function poll() {
-    try {
-      const r = await fetch("/status", { cache: "no-store" });
-      const s = await r.json();
-      setStatus(s.status_level || "info", s.status || "");
-    } catch (e) {
-      setStatus("error", "Lost connection to server");
-    } finally {
-      setTimeout(poll, 1000);
-    }
-  }
-  poll();
-
-  // Optional: optimistic "busy" hint on actions the user triggers
-  const busy = () => setStatus("busy", "Working…");
-  [["connectForm","submit"],["setForm","submit"],
-   ["trackerBtn","click"],["stopBtn","click"],
-   ["parkBtn","click"],["disconnectBtn","click"]]
-   .forEach(([id, evt]) => {
-     const el = document.getElementById(id);
-     if (!el) return;
-     el.addEventListener(evt, busy, { capture: true });
-   });
-
-  // Optional: surface network/HTTP errors globally
-  const _fetch = window.fetch;
-  window.fetch = async (...args) => {
-    try {
-      const res = await _fetch(...args);
-      if (!res.ok) setStatus("error", `HTTP ${res.status} ${res.statusText}`);
-      return res;
-    } catch (e) {
-      setStatus("error", `Network error: ${e.message}`);
-      throw e;
-    }
-  };
-})();
-
 // --- Camera health / overlay --------------------------------------------------
 (() => {
   const img = document.getElementById("camStream");
@@ -540,6 +544,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   async function pollCam() {
+    if (!img.src) {
+      showOverlay(true);
+      setTimeout(pollCam, 2000);
+      return;
+    }
     try {
       const r = await fetch("/camera/health", { cache: "no-store" });
       const j = await r.json();
@@ -558,3 +567,74 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   pollCam();
 })();
+
+function updateCoaxButtonsFromState(stateStr) {
+  // Clear existing highlights
+  for (let sid = 1; sid <= 3; sid++) {
+    ["1", "2"].forEach(side => {
+      const btn = document.getElementById(`coax-${sid}-${side}`);
+      if (btn) btn.classList.remove("coax-btn-active");
+    });
+  }
+
+  if (!stateStr || typeof stateStr !== "string") return;
+
+  // Expect e.g. "STATE S1=A S2=B S3=B"
+  const matches = stateStr.match(/S[1-3]=[12]/g);
+  if (!matches) return;
+
+  matches.forEach(chunk => {
+    const m = chunk.match(/S([1-3])=([12])/);
+    if (!m) return;
+    const sid = m[1];
+    const side = m[2];
+    const btn = document.getElementById(`coax-${sid}-${side}`);
+    if (btn) btn.classList.add("coax-btn-active");
+  });
+}
+
+// Pico relais switches
+async function setCoax(sid, side) {
+  try {
+    const r = await fetch(`/coax/${sid}/${side}`, { method: "POST" });
+    if (!r.ok) {
+      updateStatusBar(`Coax S${sid} → ${side} failed (HTTP ${r.status})`, false);
+      return;
+    }
+    const j = await r.json();
+    updateStatusBar(j.status || `Coax S${sid} → ${side}`, j.success !== false);
+    await pollCoax();
+  } catch (e) {
+    updateStatusBar(`Coax error: ${e}`, false);
+  }
+}
+
+async function pollCoax() {
+  const dot = document.getElementById("coax-conn-dot");
+  const txt = document.getElementById("coax-conn-text");
+
+  try {
+    const r = await fetch(`/coax/status`, { cache: "no-store" });
+    const j = await r.json();
+
+    const isOnline = r.ok && j.connected;
+
+    if (dot) {
+      if (isOnline) dot.classList.add("online");
+      else dot.classList.remove("online");
+    }
+    if (txt) {
+      txt.textContent = isOnline ? "Online" : "Offline";
+    }
+
+    const el = document.getElementById("coax-status");
+    if (el) el.innerText = j.state || "";
+
+    if (j.state) {
+      updateCoaxButtonsFromState(j.state);
+    }
+  } catch (e) {
+    if (dot) dot.classList.remove("online");
+    if (txt) txt.textContent = "Offline";
+  }
+}

@@ -1,157 +1,371 @@
-/* ---------- Base layout ---------- */
-body {
-  background: #f9f9f9;
-  color: #222;
-}
-.canvas-container {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 40px;
-  margin-top: 30px;
-}
-.canvas-card {
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  padding: 15px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-.camera-frame {
-  width: 100%;
-  max-width: 480px;
-  border-radius: 8px;
-  border: 1px solid #444;
-}
-#status-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  padding: 10px;
-  color: white;
-  text-align: center;
-  font-weight: bold;
-  background: red;
+/* Layout & background */
+:root {
+  --app-bg: radial-gradient(circle at top, #202040 0, #050510 45%, #020309 100%);
+  --card-bg: rgba(15, 18, 35, 0.88);
+  --card-border: rgba(255, 255, 255, 0.06);
+  --card-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
+  --accent: #19c6ff;
+  --accent-soft: rgba(25, 198, 255, 0.18);
+  --danger-soft: rgba(220, 53, 69, 0.2);
+  --text-normal: #f5f7ff;
+  --text-muted: #9ca3af;
 }
 
-/* ---------- Text colors ---------- */
-.status-text { color: black; }
-.moon-text { color: orange; }
-
-/* ---------- Dark mode ---------- */
-body.dark-mode {
-  background-color: #121212;
-  color: #e0e0e0;
-}
-body.dark-mode .canvas-card {
-  background-color: #1e1e1e;
-  border-color: #333;
-}
-body.dark-mode input,
-body.dark-mode select,
-body.dark-mode textarea,
-body.dark-mode .input-group-text {
-  background-color: #222;
-  color: #eee;
-  border: 1px solid #555;
-}
-body.dark-mode .btn-success { background-color: #2e7d32; border-color: #2e7d32; }
-body.dark-mode .btn-danger  { background-color: #c62828; border-color: #c62828; }
-body.dark-mode .btn-primary { background-color: #1565c0; border-color: #1565c0; }
-body.dark-mode .btn-warning { background-color: #f9a825; border-color: #f9a825; }
-
-body.dark-mode .status-text { color: white; }
-body.dark-mode .moon-text {
-  color: yellow;
-  text-shadow: 0 0 8px yellow;
-}
-
-/* ---------- Optional minor tweaks ---------- */
-.btn-outline-light {
-  color: #ccc;
-  border-color: #777;
-}
-body.dark-mode .btn-outline-light {
-  color: #fff;
-  border-color: #999;
-}
-/* normal layout */
-.camera-frame {
-  width: 100%;
-  max-width: 480px; 
-  border-radius: 8px;
-  border: 1px solid #444;
-}
-
-/* Fullscreen container fills the viewport */
-.cam-fs-container:fullscreen,
-.cam-fs-container:-webkit-full-screen {
-  background: black;
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+body.app-body {
+  min-height: 100vh;
   margin: 0;
-  padding: 0;
+  color: var(--text-normal);
+  background: var(--app-bg);
+  background-attachment: fixed;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* IMPORTANT: remove the 480px cap in fullscreen */
-.cam-fs-container:fullscreen .camera-frame,
-.cam-fs-container:-webkit-full-screen .camera-frame {
-  width: 100vw !important;
-  height: 100vh !important;
-  max-width: none !important;   /* ← override the cap */
-  max-height: none !important;  /* ← override any max-height */
-  object-fit: contain;          /* or 'cover' if you prefer zero borders */
-  border: none;
-  border-radius: 0;
+/* Subtle “glass” container */
+.app-shell {
+  max-width: 1400px;
+  padding: 1.5rem 1.5rem 3.2rem; /* top/right/left/bottom */
 }
 
-/* Status bar tokens */
-#status-bar { transition: background 200ms ease, color 200ms ease; }
-.statusbar { position: fixed; bottom: 0; left: 0; width: 100%; padding: 10px;
-  color: #fff; text-align: center; font-weight: bold; }
-.statusbar--info    { background: #6c757d; }   /* gray */
-.statusbar--success { background: #198754; }   /* green */
-.statusbar--warning { background: #fd7e14; }   /* orange */
-.statusbar--error   { background: #dc3545; }   /* red */
-.statusbar--busy    { background: #0d6efd; }   /* blue */
-
-/* D-pad layout */
-.dpad-wrap {
-  display: grid;
-  grid-template-columns: repeat(3, 56px);
-  grid-template-rows: repeat(3, 56px);
-  gap: 12px;                 /* padding between buttons */
-  justify-content: center;   /* center the whole pad */
-  align-items: center;
+/* Glass cards */
+.glass-card {
+  background: var(--card-bg);
+  border-radius: 1.1rem;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  overflow: hidden;
+  color: var(--text-normal);
 }
 
-/* Place each button in the grid */
-#upBtn    { grid-column: 2; grid-row: 1; }
-#leftBtn  { grid-column: 1; grid-row: 2; }
-#rightBtn { grid-column: 3; grid-row: 2; }
-#downBtn  { grid-column: 2; grid-row: 3; }
+.glass-card .card-header {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0));
+  padding: 0.9rem 1.4rem;
+}
 
-/* make buttons fill their grid cell nicely */
-.arrow {
-  width: 100%;
-  height: 100%;
-  font-size: 22px;
+.glass-card .card-body {
+  padding: 1.15rem 1.5rem 1.35rem;
+}
+
+/* Brand & header */
+.brand-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-soft), transparent 65%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  font-size: 1.4rem;
 }
-.arrow.active { outline: 2px solid rgba(13,110,253,.6); }
 
-.cam-fs-container { position: relative; }
+/* Dark mode toggle */
+.dark-toggle {
+  border-radius: 999px;
+}
+
+/* Connection dot */
+.connection-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(72, 187, 120, 0.8);
+  background: #27c361;
+}
+
+/* You can toggle this class from JS if you want a “disconnected” style */
+.connection-dot.offline {
+  background: #ff4c4c;
+  box-shadow: 0 0 12px rgba(255, 76, 76, 0.8);
+}
+
+/* Canvases */
+canvas {
+  background: radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.05), transparent 55%);
+  border-radius: 0.75rem;
+  width: 100%;
+  height: auto;
+}
+
+.dial-texts .status-text {
+  font-size: 0.85rem;
+  color: var(--text-normal);
+}
+
+.moon-text {
+  font-size: 0.85rem;
+  color: #ffd54a;
+}
+
+/* Legends */
+.legend-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  vertical-align: middle;
+  margin-right: 4px;
+}
+
+.legend-dot-antenna {
+  background: #00a2ff;
+}
+
+.legend-dot-moon {
+  background: #ffd54a;
+}
+
+.legend-dot-park {
+  background: #9ca3af;
+}
+
+/* Camera block */
+.cam-fs-container {
+  position: relative;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.9));
+  border-radius: 0.9rem;
+  min-height: 200px;
+}
+
+.camera-frame {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+/* Overlay when no video */
 .cam-overlay {
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.45);
-  color: #fff; font-weight: 700; border-radius: 8px;
-  letter-spacing: .3px;
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.95));
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+.cam-overlay-inner {
+  text-align: center;
+  color: #f87171;
+}
+
+/* D-pad as a 3x3 grid */
+.dpad-wrap {
+  display: grid;
+  grid-template-columns: repeat(3, 2.75rem);
+  grid-template-rows: repeat(3, 2.75rem);
+  gap: 0.4rem;
+  justify-content: center;
+  margin-top: 0.2rem;
+  margin-bottom: 0.8rem;
+}
+
+/* Position each button in the grid */
+#upBtn {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+#leftBtn {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+#rightBtn {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+#downBtn {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+/* Arrow button styling */
+.arrow.btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+/* Coax area */
+.coax-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.coax-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.coax-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+#coax-status {
+  font-size: 0.8rem;
+  color: var(--text-normal);
+  opacity: 0.9;
+}
+/* Coax connection indicator */
+.coax-conn small {
+  color: var(--text-muted);
+}
+
+.coax-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f97373;                   /* offline by default */
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.8);
+}
+
+.coax-dot.online {
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+}
+
+/* Coax current position highlight */
+.coax-btn-active {
+  background: var(--accent-soft) !important;
+  color: #e5f9ff !important;
+  border-color: var(--accent) !important;
+}
+
+#coax-status {
+  font-size: 0.8rem;
+  color: var(--text-normal);
+  opacity: 0.9;
+}
+
+/* Status bar at bottom */
+.statusbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: 32px;
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f9fafb;
+  background: linear-gradient(90deg, rgba(25, 198, 255, 0.1), rgba(2, 6, 23, 0.96), rgba(236, 72, 153, 0.15));
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(148, 163, 184, 0.3);
+  z-index: 1000;
+}
+
+/* Levels (used by your JS: statusbar--info/busy/error/ok/etc.) */
+.statusbar--info {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.25), rgba(15, 23, 42, 0.96));
+}
+
+.statusbar--busy {
+  background: linear-gradient(90deg, rgba(234, 179, 8, 0.25), rgba(15, 23, 42, 0.96));
+}
+
+.statusbar--error {
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.28), rgba(15, 23, 42, 0.96));
+}
+
+.statusbar--ok {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.25), rgba(15, 23, 42, 0.96));
+}
+
+/* Make sure your JS can set: bar.className = 'statusbar statusbar--xyz' */
+.statusbar[data-level="busy"]::before {
+  content: "⏳ ";
+  margin-right: 4px;
+}
+
+.statusbar[data-level="error"]::before {
+  content: "⚠️ ";
+  margin-right: 4px;
+}
+
+.statusbar[data-level="ok"]::before {
+  content: "✅ ";
+  margin-right: 4px;
+}
+
+.statusbar[data-level="info"]::before {
+  content: "ℹ️ ";
+  margin-right: 4px;
+}
+
+/* Dark mode hook (you already toggle body.dark-mode in JS) */
+body.dark-mode {
+  /* keep same bg but you could dim cards here if you like */
+}
+
+body.dark-mode .glass-card {
+  background: rgba(8, 11, 30, 0.92);
+}
+.card-connection .card-body,
+.card-target .card-body {
+  padding: 1.1rem 1.4rem 1.25rem;
+}
+
+@media (min-width: 992px) {
+  .card-connection,
+  .card-target {
+    min-height: 140px;
+  }
+}
+
+
+/* Slight extra spacing around the target inputs */
+.card-target form#setForm {
+  gap: 0.5rem;
+}
+
+/* Ensure sections don’t touch too tightly */
+section {
+  margin-bottom: 1.6rem;
+}
+
+/* Slightly round the inputs so they don't look glued to edges */
+.card-connection .form-select,
+.card-target .form-control {
+  border-radius: 0.6rem;
+}
+
+/* Make target form breathe a bit on bigger screens */
+.card-target form#setForm {
+  gap: 0.5rem;
+}
+
+.card-target .input-group-text {
+  min-width: 2.4rem;
+  justify-content: center;
+}
+
+/* Small tweaks */
+.small,
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+/* Responsive tweaks */
+@media (max-width: 576px) {
+  .glass-card {
+    border-radius: 0.9rem;
+  }
+
+  .statusbar {
+    font-size: 0.8rem;
+    padding-inline: 8px;
+  }
+}

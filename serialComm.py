@@ -28,7 +28,9 @@ class SerialAntenna:
         """
         if not self.connected:
             raise ConnectionError("Serial port not connected")
-        cmd = bytes([0x57] + [0]*10 + [0x1F, 0x20])
+        cmd = bytes([0x57] +        # 'w' start bit
+                    [0]*10 +        # 10 times 0 (would be az/el at send)
+                    [0x1F, 0x20])   # command for read and stop bit
         self.ser.reset_input_buffer()
         self.ser.write(cmd)
         time.sleep(0.1)

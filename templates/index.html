@@ -3,111 +3,274 @@
 <head>
   <meta charset="UTF-8" />
   <title>MD-01 Controller</title>
+
+  <!-- Bootstrap -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Custom styles -->
   <link href="/static/style.css" rel="stylesheet">
 </head>
 
-<body class="text-center">
+<body class="app-body text-center">
 
-  <div class="container my-3">
+  <div class="app-shell container-fluid py-3">
 
-    <!-- Connection Row -->
-    <div class="row mb-3">
-      <div class="col-md-12 d-flex justify-content-center">
-        <form id="connectForm" class="d-flex me-2">
-          <select name="port" class="form-select me-2">
-            {% for p in ports %}
-              <option value="{{p}}" {% if state.port == p %}selected{% endif %}>{{p}}</option>
-            {% endfor %}
-          </select>
-          <button type="submit" class="btn btn-success">Connect</button>
-        </form>
-
-        <button id="disconnectBtn" type="button" class="btn btn-danger me-2">Disconnect</button>
-        <button id="darkModeBtn" type="button"
-                class="btn btn-secondary"
-                data-label-light="🌙 Dark Mode"
-                data-label-dark="☀️ Light Mode">
-          🌙 Dark Mode
-        </button>
-      </div>
-    </div>
-
-    <!-- Movement Row -->
-    <div class="row mb-3">
-      <div class="col-md-12 d-flex justify-content-center">
-
-        <form id="setForm" class="d-flex me-2">
-          <input type="number" name="az" min="-360" max="359" step="0.1"
-                 value="{{state.az}}" class="form-control me-2" placeholder="Az">
-          <input type="number" name="el" min="15" max="90" step="0.1"
-                 value="{{state.el}}" class="form-control me-2" placeholder="El">
-          <button type="submit" class="btn btn-primary">Set</button>
-        </form>
-
-        <div class="btn-group ms-2">
-          <button id="trackerBtn" type="button" class="btn btn-success">Tracker Start</button>
-          <button id="stopBtn" type="button" class="btn btn-warning">Stop</button>
-          <button id="parkBtn" type="button" class="btn btn-info">Park</button>
+    <!-- Header -->
+    <header class="mb-3">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <div class="brand-icon">
+            <span>📡</span>
+          </div>
+          <div class="text-start">
+            <h1 class="h4 mb-0 fw-bold">MD-01 Controller</h1>
+            <small class="text-muted d-block">Moon tracking & antenna control</small>
+          </div>
         </div>
 
-        <div class="form-check ms-3 align-self-center">
-          <input class="form-check-input" type="checkbox" id="forceTrackChk">
-          <label class="form-check-label" for="forceTrackChk">Force below 15°</label>
+        <div class="d-flex align-items-center gap-2">
+          <button id="darkModeBtn" type="button"
+                  class="btn btn-outline-light btn-sm dark-toggle"
+                  data-label-light="🌙 Dark Mode"
+                  data-label-dark="☀️ Light Mode">
+            🌙 Dark Mode
+          </button>
         </div>
       </div>
-    </div>
-  </div>
+    </header>
 
-  <!-- Graphics -->
-  <div class="canvas-container">
-    <div class="canvas-card text-center">
-      <canvas id="azCanvas" width="300" height="300"></canvas>
-      <p id="azText" class="status-text mt-2">Antenna absolute azimuth: --°</p>
-      <p id="azNormText" class="status-text mt-2">Antenna normed azimuth: --°</p>
-      <p id="azMoonText" class="moon-text">Moon angle: --°</p>
-    </div>
+    <!-- Connection & Movement Row -->
+    <section class="mb-3">
+      <div class="row g-3 align-items-stretch">
 
-    <div class="canvas-card text-center">
-      <canvas id="elCanvas" width="300" height="300"></canvas>
-      <p id="elText" class="status-text mt-2">Antenna elevation: --°</p>
-      <p id="elMoonText" class="moon-text">Moon angle: --°</p>
-    </div>
+        <!-- Connection -->
+        <div class="col-lg-4">
+          <div class="glass-card h-100 card-connection">
+            <div class="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3">
+              <span class="fw-semibold">Connection</span>
+              <span class="connection-dot" id="connection-dot"></span>
+            </div>
+            <div class="card-body pt-2">
+              <form id="connectForm" class="d-flex gap-2 mb-2">
+                <select name="port" class="form-select form-select-sm">
+                  {% for p in ports %}
+                    <option value="{{p}}" {% if state.port == p %}selected{% endif %}>{{p}}</option>
+                  {% endfor %}
+                </select>
+                <button type="submit" class="btn btn-success btn-sm flex-shrink-0">Connect</button>
+              </form>
 
-    <div class="canvas-card text-center">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <h5 class="mb-0">Antenna Camera</h5>
-        <div class="btn-group">
-          <button id="camFsBtn" type="button" class="btn btn-outline-info">⛶ Fullscreen</button>
+              <div class="d-flex gap-2 justify-content-between">
+                <button id="disconnectBtn" type="button" class="btn btn-outline-danger btn-sm flex-fill">
+                  Disconnect
+                </button>
+                <div class="small text-muted text-start">
+                  <div>Port: <span class="fw-semibold" id="connection-port-text">{{ state.port or "—" }}</span></div>
+                  <div>Status: <span class="fw-semibold" id="connection-status-text">Idle</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
+
+        <!-- Movement -->
+        <div class="col-lg-8">
+          <div class="glass-card h-100 card-target">
+            <div class="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3">
+              <span class="fw-semibold">Target Position</span>
+              <span class="badge bg-secondary-subtle text-secondary-emphasis">
+                Step 0.1° · Safety below 15°
+              </span>
+            </div>
+            <div class="card-body">
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <form id="setForm" class="d-flex flex-wrap flex-md-nowrap gap-2 flex-grow-1">
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">Az</span>
+                    <input type="number" name="az" min="-360" max="359" step="0.1"
+                           value="{{state.az}}" class="form-control" placeholder="Azimuth">
+                  </div>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text">El</span>
+                    <input type="number" name="el" min="0" max="90" step="0.1"
+                           value="{{state.el}}" class="form-control" placeholder="Elevation">
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-sm flex-shrink-0">
+                    Set
+                  </button>
+                </form>
+
+                <div class="d-flex align-items-center gap-2 ms-md-2">
+                  <div class="btn-group btn-group-sm" role="group">
+                    <button id="trackerBtn" type="button" class="btn btn-success">Tracker Start</button>
+                    <button id="stopBtn" type="button" class="btn btn-warning">Stop</button>
+                    <button id="parkBtn" type="button" class="btn btn-info">Park</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div class="form-check form-switch small">
+                  <input class="form-check-input" type="checkbox" id="forceTrackChk">
+                  <label class="form-check-label" for="forceTrackChk">
+                    Force tracking below 15°
+                  </label>
+                </div>
+                <div class="small text-muted ms-auto">
+                  <span class="legend-dot legend-dot-antenna"></span> Antenna
+                  <span class="legend-dot legend-dot-moon ms-3"></span> Moon
+                  <span class="legend-dot legend-dot-park ms-3"></span> Park
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
+    </section>
+
+    <!-- Main cards row -->
+    <section class="mb-4">
+      <div class="row g-3">
+
+        <!-- Azimuth -->
+        <div class="col-xl-3 col-lg-6">
+          <div class="glass-card h-100">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">Azimuth Dial</span>
+              <span class="badge bg-dark-subtle text-light-emphasis small">360°</span>
+            </div>
+            <div class="card-body">
+              <canvas id="azCanvas" width="280" height="260" class="rounded"></canvas>
+              <div class="mt-3 dial-texts">
+                <p id="azText" class="status-text mb-1">Antenna absolute azimuth: --°</p>
+                <p id="azNormText" class="status-text mb-1">Antenna normed azimuth: --°</p>
+                <p id="azMoonText" class="moon-text mb-0">Moon angle: --°</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Elevation -->
+        <div class="col-xl-3 col-lg-6">
+          <div class="glass-card h-100">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">Elevation Dial</span>
+              <span class="badge bg-dark-subtle text-light-emphasis small">0–90°</span>
+            </div>
+            <div class="card-body">
+              <canvas id="elCanvas" width="280" height="260" class="rounded"></canvas>
+              <div class="mt-3 dial-texts">
+                <p id="elText" class="status-text mb-1">Antenna elevation: --°</p>
+                <p id="elMoonText" class="moon-text mb-0">Moon angle: --°</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Camera -->
+        <div class="col-xl-3 col-lg-6">
+          <div class="glass-card h-100">
+            <div class="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3">
+              <span class="fw-semibold">Antenna Camera</span>
+              <div class="btn-group btn-group-sm">
+                <button id="camFsBtn" type="button" class="btn btn-outline-info">⛶ Fullscreen</button>
+              </div>
+            </div>
+
+            <div class="card-body">
+              <div id="camFsContainer" class="cam-fs-container rounded overflow-hidden position-relative">
+                <!-- IMPORTANT: src="/video.mjpg" directly -->
+                <img id="camStream"
+                    src="/video.mjpg"
+                    alt="Camera stream"
+                    class="camera-frame w-100">
+
+                <!-- Overlay controlled by JS -->
+                <div id="camOverlay" class="cam-overlay" hidden>
+                  <div class="cam-overlay-inner">
+                    <span class="display-6 d-block mb-2">⛔</span>
+                    <span class="fw-semibold d-block">No video signal</span>
+                    <small class="d-block text-muted">Trying to re-connect…</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manual control + Coax -->
+        <div class="col-xl-3 col-lg-6">
+          <div class="glass-card h-100">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center gap-2">
+                <span class="fw-semibold">Manual Control</span>
+                <span class="badge bg-secondary small">INOP</span>
+              </div>
+            </div>
+
+            <div class="card-body">
+
+              <!-- D-pad -->
+              <div class="dpad-wrap">
+                <button id="upBtn"    type="button" class="btn btn-outline-primary arrow" aria-label="Jog up">⬆️</button>
+                <button id="leftBtn"  type="button" class="btn btn-outline-primary arrow" aria-label="Jog left">⬅️</button>
+                <button id="rightBtn" type="button" class="btn btn-outline-primary arrow" aria-label="Jog right">➡️</button>
+                <button id="downBtn"  type="button" class="btn btn-outline-primary arrow" aria-label="Jog down">⬇️</button>
+              </div>
+              <hr class="my-2">
+
+              <!-- Coax switches -->
+              <h6 class="mb-1 d-flex justify-content-between align-items-center">
+                <span>Coax Switches</span>
+                <span class="coax-conn d-inline-flex align-items-center gap-1">
+                  <span class="coax-dot" id="coax-conn-dot"></span>
+                  <small id="coax-conn-text">Offline</small>
+                </span>
+              </h6>
+
+              <div id="coax-status" class="small mb-2 text-start"></div>
+
+              <div class="coax-grid">
+                <div class="coax-row">
+                  <span class="coax-label">S1</span>
+                  <div class="btn-group btn-group-sm">
+                    <button onclick="setCoax(1,'A')" id="coax-1-A" type="button" class="btn btn-outline-light">A</button>
+                    <button onclick="setCoax(1,'B')" id="coax-1-B" type="button" class="btn btn-outline-light">B</button>
+                  </div>
+                </div>
+                <div class="coax-row">
+                  <span class="coax-label">S2</span>
+                  <div class="btn-group btn-group-sm">
+                    <button onclick="setCoax(2,'A')" id="coax-2-A" type="button" class="btn btn-outline-light">A</button>
+                    <button onclick="setCoax(2,'B')" id="coax-2-B" type="button" class="btn btn-outline-light">B</button>
+                  </div>
+                </div>
+                <div class="coax-row">
+                  <span class="coax-label">S3</span>
+                  <div class="btn-group btn-group-sm">
+                    <button onclick="setCoax(3,'A')" id="coax-3-A" type="button" class="btn btn-outline-light">A</button>
+                    <button onclick="setCoax(3,'B')" id="coax-3-B" type="button" class="btn btn-outline-light">B</button>
+                  </div>
+                </div>
+              </div>
 
 
-  <!-- Wrap the <img> for fullscreen -->
-  <div id="camFsContainer" class="cam-fs-container">
-    <img id="camStream" src="/video.mjpg" alt="Camera stream" class="camera-frame">
-    <div id="camOverlay" class="cam-overlay" hidden>No video signal</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
   </div>
+
+  <!-- Status bar (sticky bottom) -->
+  <div id="status-bar" class="statusbar">
+    {{ state.status }}
   </div>
 
-<!-- movement buttons-->
-<!-- D-pad -->
-<div class="canvas-card text-center">
-  <div class="d-flex justify-content-between align-items-center mb-2">
-    <h5 class="mb-0">Antenna manual control - INOP</h5>
-    <div class="text-center small">Hold for repeat · Shift = coarse</div>
-  </div>
-
-  <div class="dpad-wrap">
-    <button id="upBtn"    type="button" class="btn btn-primary arrow" aria-label="Jog up">⬆️</button>
-    <button id="leftBtn"  type="button" class="btn btn-primary arrow" aria-label="Jog left">⬅️</button>
-    <button id="rightBtn" type="button" class="btn btn-primary arrow" aria-label="Jog right">➡️</button>
-    <button id="downBtn"  type="button" class="btn btn-primary arrow" aria-label="Jog down">⬇️</button>
-  </div>
-</div>
-  <!-- Status bar -->
-  <div id="status-bar">{{ state.status }}</div>
-
+  <!-- Your JS bundle (everything you pasted lives here) -->
   <script src="/static/app.js"></script>
 </body>
 </html>
