@@ -81,7 +81,7 @@ if __name__ == "__main__":
     print(closest_time)
 
     fs = 200000  # samples per second
-    wpm = 700  # words per minute
+    wpm = 50  # words per minute
     snr =  80 # target snr
     msg = 'HB9HSR DE HB9HSR AR BT EME RANGE MOON BT RTT MEASUREMENT ONLY BT NO REPLY PSE BT EXPERIMENTAL TX BT TNX BT HB9HSR AR SK' # message
 
@@ -91,7 +91,17 @@ if __name__ == "__main__":
     # morse, length = set_text(wpm, msg, fs)
     # noisy_morse, noise = add_noise((morse+1)/2, snr)
 
-    morse1, length1 = set_text(50, 'HB9HSR T', fs)
+    morseinc, length1 = set_text(50, 'HB9HSR T', fs)
+    morse_tx, lengthtx = set_text(50, 'HB9HSR T', 20000)
+
+    # fig, ax = plt.subplots()
+    # ax.plot(np.arange(morse_tx.size)/20000, morse_tx)
+    # print(morse_tx.size)
+    # plt.show()
+
+    # spülung = np.zeros([600000])
+    # morseinc = np.concatenate((spülung, morseinc))
+
     # noisy_morse1, noise1 = add_noise((morse1+1)/2, snr)
 
     # morse2, length2 = set_text(100, 'HB9HSR TEST AR SK', fs)
@@ -100,13 +110,17 @@ if __name__ == "__main__":
     # chips, length_pn = set_pn_seq(6, fs)
     # noisy_pn, noise_pn = add_noise((np.array(chips)+1)/2, snr)
 
-
+    save_path_tx = r'N:\Empfang_data\erste_Versuch_tx.bin'  
+    os.makedirs(os.path.dirname(save_path_tx), exist_ok=True)
+    (morse_tx).astype('<f4').ravel().tofile(save_path_tx)
+    print('Saved to:', save_path_tx)
+    # print(len(morseinc))
     
     save_path = r'C:\Users\yves.looser\OneDrive - OST\Dokumente/binforMorse.bin'  
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    (morse1).astype('<f4').ravel().tofile(save_path)
+    (morseinc).astype('<f4').ravel().tofile(save_path)
     print('Saved to:', save_path)
-    print(len(morse1))
+    print(len(morseinc))
     
     #noisy_morse_2 = np.concatenate((noisy_morse_2, noise_2))
     #length *= 3
@@ -117,7 +131,7 @@ if __name__ == "__main__":
     # print(f'{length}. Message length fits!') if length <= closest_time else print(f'{length}. To long message!')
     # print('Human readable!') if wpm <= 50 else print('Non readable!')
 
-    print(f'{length1}. HB9HSR T | length fits!') if length1 <= closest_time else print(f'{length1}. To long message!')
+    print(f'{lengthtx}. HB9HSR T | length fits!') if lengthtx <= closest_time else print(f'{lengthtx}. To long message!')
     print('Human readable!') if wpm <= 50 else print('Non readable!')
 
     # print(f'{length2}. HB9HSR TEST AR SK | length fits!') if length2 <= closest_time else print(f'{length2}. To long message!')
