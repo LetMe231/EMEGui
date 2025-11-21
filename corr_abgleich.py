@@ -1,9 +1,10 @@
 import numpy as np
+from numpy.fft import fft, ifft
 import matplotlib.pyplot as plt
 
 def read_files(tx_name = '*.bin', rx_name = '*.bin'):
     with open(f'N:\Empfang_data\{tx_name}', mode='rb') as file:
-        tx = np.fromfile(file, dtype=np.complex64)
+        tx = np.fromfile(file, dtype=np.float32)
     with open(f'N:\Empfang_data\{rx_name}', mode='rb') as file:
         rx = np.fromfile(file, dtype=np.complex64)
     return ((tx).astype(np.float32)), ((rx).astype(np.float32))
@@ -11,38 +12,44 @@ def read_files(tx_name = '*.bin', rx_name = '*.bin'):
 
 if __name__ == "__main__":
 
-    fs = 200000
+    fs = 20000
     N = 460800
     Ndelay = 2 * 226667
     Nchain = 80
     c = 299792458 #m/s
     
-    tx, rx_time = read_files('erste_Versuch_tx.bin', 'rx_abgleich.bin')
+    tx, rx = read_files('erste_Versuch_tx.bin', 'rx_abgleich.bin')
 
     t_tx = np.arange(tx.size)/fs
+    t_rx = np.arange(rx.size)/fs
+    
+    rx_fft = fft(rx)
+    tx_fft = fft(tx, n=len(rx)).conj()
+    xcorr = np.abs(ifft(rx_fft*tx_fft))
 
-    t_rx_time = np.arange(rx_time.size)/fs
-    # corr1 = np.round(np.correlate(tx, rx, mode='full'))
-    corrt = np.round(np.correlate((rx_time)[::10], (tx)[::10], mode='full'))
+    start_samp = round(2.4*fs)
+    rx_start = rx[:start_samp]
+    t_rx_start = np.arange(rx_start.size)/fs
+    # print(rx_start.size)
+    # print(tx.size)
+    rx_start_fft = fft(rx_start)
+    tx_start_fft = fft(tx, n=len(rx_start)).conj()
+    start_corr = np.abs(ifft(rx_start_fft*tx_start_fft))
 
+    fig ,ax = plt.subplots(3,2)
+    ax[0,0].plot(t_tx, tx)
+    ax[1,0].plot(t_rx_start, rx_start)
+    ax[2,0].plot(t_rx_start, start_corr)
 
-    t_corr1 = np.arange(np.concatenate((tx, rx_time)).size)[:-1]
-    t_corrt = np.arange(np.concatenate((tx, rx_time)).size/10)[:-1]
+    ax[0,1].plot(t_tx, tx)
+    ax[1,1].plot(t_rx, rx)
+    ax[2,1].plot(t_rx, xcorr)
 
-
-
-    fig ,ax = plt.subplots(3)
-    ax[0].plot(t_tx, tx)
-    ax[1].plot(t_rx_time, rx_time)
-    ax[2].plot(t_corrt, corrt)
-
-    peak_rx_time = t_corrt[np.argmax(np.abs(corrt))]*10
+    relevant = round(1.2*fs)
+    peak_rx_start = t_rx_start[np.argmax(start_corr[:relevant])]
+    peak_rx_time = t_rx[np.argmax(xcorr)]
+    print(peak_rx_start)
     print(peak_rx_time)
-    dely = (peak_rx_time - N - 1)
-    print(dely)
-    # print(f'Time of Flight: {TOF} s')
-    # dist = (TOF * c)/2000
-    # print(f'Distanz: {int(dist)} km') 
-    # actualldelay= Ndelay / fs
-    # print(f'soll Zeit: {actualldelay}')
+    print(peak_rx_time-peak_rx_start)
+
     plt.show()
