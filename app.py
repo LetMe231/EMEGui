@@ -1,6 +1,7 @@
 from flask import Flask, render_template, jsonify, request, Response
 from camera import CameraStream, mjpeg_generator
 import serial.tools.list_ports
+from datetime import datetime, UTC
 import threading, time, os
 
 # --- App setup ----------------------------------------------------------------
@@ -14,14 +15,19 @@ camera = CameraStream(src=CAMERA_SOURCE, jpeg_quality=80)
 
 # --- Antenna & moon tracking imports -----------------------------------------
 from serialComm import SerialAntenna
+from serialSwitch import SerialSwitch
 import CalcMoonPos
 
 serial_lock = threading.Lock()
 tracking_thread = None
 tracking_stop = threading.Event()
 
-# --- Configuration ------------------------------------------------------------
-# --- Parking ------------------------------------------------------------------
+# --- pico autoconnect ---------------------------------------------------------
+SWITCH_PORT_ENV = "SWITCH_PORT"
+SWITCH_PORT = "COM4"
+switch = None
+
+# --- Set parking position -----------------------------------------------------
 PARKAZ = 40
 PARKEL = 60
 
@@ -49,7 +55,12 @@ state = {
     "az_moon": 0.0,
     "el_moon": 0.0,
     "tracking": False,
-    "port": None
+    "port": None,
+    "switches": {
+        "S1": 0,
+        "S2": 0,
+        "S3": 0,
+    }
 }
 
 ant = None
@@ -66,7 +77,7 @@ def set_status(level: str, message: str):
     """
     state["status_level"] = level
     state["status"] = message
-    state["status_at"] = datetime.utcnow().isoformat() + "Z"
+    state["status_at"] =  datetime.now(UTC).isoformat()
 
 def api_action(fn):
     """Decorator to return uniform JSON on failures and set status."""
@@ -190,6 +201,23 @@ def safe_azimuth(target_az, current_az):
         new_az += 360
     return new_az
 
+camera_lock = threading.Lock()
+def ensure_camera_running():
+    """
+    Safely start the camera if it's not running yet.
+    Called from routes that need video/health.
+    """
+    with camera_lock:
+        try:
+            if not camera.running:
+                camera.start()
+        except Exception as e:
+            # store error for health endpoint / debugging
+            try:
+                camera.last_error = str(e)
+            except Exception:
+                pass
+
 # --- Background poll loop -----------------------------------------------------
 def poll_loop():
     global ant, state
@@ -291,10 +319,11 @@ def disconnect():
 @api_action
 def set_position():
     global ant
+    force = request.args.get("force", "0") == "1"
     az_req = float(request.form["az"])     # app-space target
     el_req = float(request.form["el"])
 
-    if el_req <= 15:
+    if el_req <= 15 and not force:
         set_status("warning", "Elevation must be > 15°")
         return jsonify(success=False, status=state["status"]), 400
     if not ant:
@@ -508,36 +537,153 @@ def park():
 @app.route("/camera/health")
 def camera_health():
     # Try to (re)start gently if not running
-    try:
-        if not camera.running:
-            camera.start()
-    except Exception as e:
-        try:
-            camera.last_error = str(e)
-        except Exception:
-            pass
+    ensure_camera_running()
+
     h = camera.get_health()
     ok = h["running"] and (h["has_frame"] or h["last_frame_age"] is not None)
     return jsonify(h), (200 if ok else 503)
 
 @app.route("/video.mjpg")
 def video_mjpg():
-    # Proactively start so we can 503 cleanly if it fails
-    try:
-        if not camera.running:
-            camera.start()
-    except Exception as e:
-        try:
-            camera.last_error = str(e)
-        except Exception:
-            pass
-        # <img> will fire onerror; frontend shows "No video"
+    # Make sure the camera is running
+    ensure_camera_running()
+
+    h = camera.get_health()
+    ok = h["running"] and (h["has_frame"] or h["last_frame_age"] is not None)
+    if not ok:
+        # <img> onerror will show "No video signal"
         return Response(status=503)
-    # Stream if we can
-    return Response(mjpeg_generator(camera, fps=25),
-                    mimetype="multipart/x-mixed-replace; boundary=frame")
+
+    return Response(
+        mjpeg_generator(camera, fps=25),
+        mimetype="multipart/x-mixed-replace; boundary=frame"
+    )
+
+
+# --- Raspberry Commands -------------------------------------------------------
+def find_pico_port():
+    env_port = os.getenv(SWITCH_PORT_ENV)
+    if env_port:
+        return env_port
+
+    for p in serial.tools.list_ports.comports():
+        desc = (p.description or "").lower()
+        # VID 0x2E8A = Raspberry Pi Pico
+        if p.vid == 0x2E8A or "pico" in desc or "raspberry" in desc:
+            return p.device
+    return None
+
+def auto_connect_switch():
+    global switch
+    port = find_pico_port()
+    if not port:
+        set_status("warning", "Pico switch not found on any COM port")
+        switch = None
+        return False
+
+    try:
+        with serial_lock:
+            switch = SerialSwitch(port)
+        set_status("success", f"Switch auto-connected on {port}")
+        return True
+    except Exception as e:
+        switch = None
+        set_status("error", f"Failed to auto-connect switch on {port}: {e}")
+        return False
+
+@app.route("/coax/<int:sid>/<side>", methods=["POST"])
+@api_action
+def coax_set(sid, side):
+    global switch
+
+    if sid not in [1,2,3] or side.upper() not in ["1","2"]:
+        return jsonify(success=False, error="Invalid command"), 400
+
+    if not ensure_switch_connected():
+        return jsonify(success=False, error="Not connected"), 500
+
+    with serial_lock:
+        resp = switch.set(sid, side)
+
+    set_status("success", f"Coax S{sid} → {side}: {resp}")
+    return jsonify(success=True, state=resp)
+
+
+@app.route("/coax/status")
+@api_action
+def coax_status():
+    global switch, state
+
+    if not ensure_switch_connected():
+        set_status("error", "Switch controller not connected")
+        # Let frontend treat this as "offline"
+        return jsonify(success=False, connected=False, state="NO RESPONSE"), 500
+
+    with serial_lock:
+        st = switch.status_parsed()
+
+    # Update global state switches (optional, but nice to have)
+    if "switches" in st and isinstance(st["switches"], dict):
+        # convert keys like "S1" to int index or keep as text
+        state["switches"] = st["switches"]
+
+    return jsonify(
+        success=True,
+        connected=st["connected"],
+        state=st["raw"],
+        switches=st["switches"],
+    )
+
+
+def ensure_switch_connected() -> bool:
+    global switch
+
+    # Already connected & open?
+    if switch is not None:
+        try:
+            if getattr(switch, "ser", None) and switch.ser.is_open and getattr(switch, "connected", True):
+                return True
+        except Exception:
+            pass  # something went wrong, we'll try reconnect
+
+    # Not connected or broken → try auto connect
+    try:
+        auto_connect_switch()
+    except Exception:
+        pass
+
+    # Check again
+    if switch is None:
+        return False
+
+    try:
+        return bool(
+            getattr(switch, "ser", None)
+            and switch.ser.is_open
+            and getattr(switch, "connected", True)
+        )
+    except Exception:
+        return False
+
 
 # --- Main ---------------------------------------------------------------------
 if __name__ == "__main__":
     threading.Thread(target=poll_loop, daemon=True).start()
-    app.run(debug=True)
+
+    # Try to start camera once
+    try:
+        camera.start()
+    except Exception as e:
+        camera.last_error = str(e)
+        print("ERROR starting camera:", e)
+    # VERY IMPORTANT: no debug reloader while we debug serial
+    try:
+        switch = SerialSwitch(SWITCH_PORT)
+        set_status("success", f"Switch connected on {SWITCH_PORT}")
+    except Exception as e:
+        switch = None
+        set_status("error", f"Failed to open {SWITCH_PORT}: {e}")
+        print("ERROR opening switch serial:", e)
+
+    app.run(debug=False)
+
