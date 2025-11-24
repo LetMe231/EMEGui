@@ -293,7 +293,7 @@ async function refreshStatus() {
     const elText     = document.getElementById("elText");
     const elMoonText = document.getElementById("elMoonText");
     const trackerBtn = document.getElementById("trackerBtn");
-    const forceChk   = document.getElementById("forceTrackChk");
+    const forceChk   = document.getElementById("forceElChk");
 
     // Numbers under canvases
     if (azText) {
@@ -461,8 +461,9 @@ document.addEventListener("DOMContentLoaded", () => {
   if (setForm) {
     setForm.addEventListener("submit", async (e) => {
       e.preventDefault();
+      const force = document.getElementById("forceElChk")?.checked ? "1" : "0";
       const formData = new FormData(e.target);
-      const res = await fetch("/set", { method: "POST", body: formData });
+      const res = await fetch(`/set?force=${force}`, { method: "POST", body: formData });
       const data = await res.json();
       updateStatusBar(data.status, data.success);
       refreshStatus();
@@ -473,7 +474,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const trackerBtn = document.getElementById("trackerBtn");
   if (trackerBtn) {
     trackerBtn.addEventListener("click", async () => {
-      const force = document.getElementById("forceTrackChk")?.checked ? "1" : "0";
+      const force = document.getElementById("forceElChk")?.checked ? "1" : "0";
       const res = await fetch(`/tracker?force=${force}`, { method: "POST" });
       const data = await res.json();
       updateStatusBar(data.status, data.success);
@@ -519,23 +520,36 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 // --- Camera health / overlay --------------------------------------------------
-(() => {
+document.addEventListener("DOMContentLoaded", () => {
   const img = document.getElementById("camStream");
   const overlay = document.getElementById("camOverlay");
-  if (!img || !overlay) return;
 
-  let lastReload = 0;
+  if (!img || !overlay) return;
 
   function showOverlay(on) {
     overlay.hidden = !on;
   }
+
+  function startStream() {
+    img.src = img.dataset.src + "?ts=" + Date.now();
+  }
+
+  img.addEventListener("error", () => {
+    showOverlay(true);
+    setTimeout(startStream, 1000);
+  });
+
+  img.addEventListener("load", () => showOverlay(false));
+
+  // Start immediately
+  startStream();
 
   img.addEventListener("error", () => {
     showOverlay(true);
     const now = Date.now();
     if (now - lastReload > 4000) {
       lastReload = now;
-      img.src = (img.dataset.src || "/video.mjpg") + "?ts=" + Date.now();
+      startStream();
     }
   });
 
@@ -551,25 +565,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (ok) {
         showOverlay(false);
-        if (!img.src || !img.src.includes("/video.mjpg")) {
-          img.src = (img.dataset.src || "/video.mjpg") + "?ts=" + Date.now();
-        }
+        if (!img.src.includes("/video.mjpg")) startStream();
       } else {
         showOverlay(true);
         if (Date.now() - lastReload > 4000) {
           lastReload = Date.now();
-          img.src = (img.dataset.src || "/video.mjpg") + "?ts=" + Date.now();
+          startStream();
         }
       }
     } catch {
       showOverlay(true);
-    } finally {
-      setTimeout(pollCam, 2000);
     }
+    setTimeout(pollCam, 2000);
   }
 
   pollCam();
-})();
+
+  // --- Fullscreen toggle ---
+  if (fsBtn) {
+    async function toggleFs() {
+      try {
+        if (!document.fullscreenElement) {
+          await (fsContainer.requestFullscreen
+            ? fsContainer.requestFullscreen()
+            : fsContainer.webkitRequestFullscreen?.());
+        } else {
+          await (document.exitFullscreen
+            ? document.exitFullscreen()
+            : document.webkitExitFullscreen?.());
+        }
+      } catch (e) {
+        console.error("Fullscreen error:", e);
+      }
+    }
+    fsBtn.addEventListener("click", toggleFs);
+    if (img) img.addEventListener("dblclick", toggleFs);
+
+    function updateFsLabel() {
+      fsBtn.textContent = document.fullscreenElement ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
+    }
+    document.addEventListener("fullscreenchange", updateFsLabel);
+    document.addEventListener("webkitfullscreenchange", updateFsLabel);
+    updateFsLabel();
+  }
+
+});
+
 
 // Pico relais switches
 async function setCoax(sid, side) {

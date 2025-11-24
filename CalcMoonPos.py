@@ -8,9 +8,9 @@ def get_moon_position():
     returns: az - Azimuth and el - Elevation of the Moon.
     """
     observer = ephem.Observer()
-    observer.lat = '47.22373165068804'    # Latitude
-    observer.lon = '8.817665635178574'    # Longitude
-    observer.elev = 451                   # Elevation in meters
+    observer.lat = '47.2237270'    # Latitude
+    observer.lon = '8.8176838'    # Longitude
+    observer.elev = 466.63                   # Elevation in meters
     observer.date = ephem.now()
     moon = ephem.Moon(observer)
     az = float(moon.az) * 180.0 / ephem.pi

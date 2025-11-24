@@ -124,7 +124,7 @@ canvas {
   position: relative;
   background: radial-gradient(circle at center, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.9));
   border-radius: 0.9rem;
-  min-height: 200px;
+  min-height: 150px;
 }
 
 .camera-frame {
@@ -303,11 +303,6 @@ canvas {
 .statusbar[data-level="info"]::before {
   content: "ℹ️ ";
   margin-right: 4px;
-}
-
-/* Dark mode hook (you already toggle body.dark-mode in JS) */
-body.dark-mode {
-  /* keep same bg but you could dim cards here if you like */
 }
 
 body.dark-mode .glass-card {

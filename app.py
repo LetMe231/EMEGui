@@ -63,7 +63,7 @@ tracking_stop = threading.Event()
 
 # Pico switch auto-detection
 SWITCH_PORT_ENV = "SWITCH_PORT"     # optional override, e.g. "COM5"
-SWITCH_PORT_DEFAULT = "COM4"            # optional hard-coded fallback; "" = disabled
+SWITCH_PORT_DEFAULT = ""            # optional hard-coded fallback; "" = disabled
 switch: Optional[SerialSwitch] = None
 
 
@@ -572,13 +572,12 @@ def disconnect():
 def set_position():
     """Manually set antenna position (az, el)."""
     global ant
-
     force = request.args.get("force", "0") == "1"
     az_req = float(request.form["az"])
     el_req = float(request.form["el"])
 
-    if el_req <= 15 and not force:
-        set_status("warning", "Elevation must be > 15°")
+    if (el_req <= ELEVATION_MIN) and not force:
+        set_status("warning", f"Elevation must be >= {ELEVATION_MIN}°")
         return jsonify(success=False, status=state["status"]), 400
 
     if not ant:
@@ -1002,11 +1001,6 @@ def auto_connect_switch(quiet: bool = False) -> bool:
 
 
 def ensure_switch_connected(quiet: bool = False) -> bool:
-    """
-    Make sure `switch` exists and its serial port is open.
-
-    Returns True if ready, False otherwise.
-    """
     global switch
 
     # Drop broken / closed instances
@@ -1026,21 +1020,37 @@ def ensure_switch_connected(quiet: bool = False) -> bool:
             return False
         try:
             with serial_lock:
-                switch = SerialSwitch(port)
+                sw = SerialSwitch(port)
+
+                # Probe once to make sure it’s *our* Pico firmware
+                st = sw.status_parsed()
+                sw_dict = st.get("switches") or {}
+                if not (isinstance(sw_dict, dict) and {"S1", "S2", "S3"} <= set(sw_dict.keys())):
+                    # Not our device → close and fail
+                    try:
+                        sw.ser.close()
+                    except Exception:
+                        pass
+                    if not quiet:
+                        set_status("warning", f"Port {port} is not a Pico coax switch")
+                    return False
+
+                switch = sw
+
             if not quiet:
                 set_status("success", f"Pico switch connected on {port}")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             switch = None
             if not quiet:
                 set_status("error", f"Failed to open Pico switch on {port}: {exc}")
             return False
 
-    # At this point we *expect* an open port
     try:
         return bool(switch and switch.ser and switch.ser.is_open)
     except Exception:
         switch = None
         return False
+
 
 
 
@@ -1081,23 +1091,22 @@ def coax_status():
 
     - Never updates main status bar.
     - Always returns HTTP 200.
-    - Says connected=True when the serial port is open, even if STATUS parsing fails.
+    - Says connected=True ONLY if we can successfully read & parse STATUS.
     """
     global switch
 
-    # 1) Ensure we have an open switch on some port (COM4 via find_pico_port)
+    # 1) Ensure we have an open switch on some port
     if not ensure_switch_connected(quiet=True) or switch is None:
         return jsonify(
-            success=True,          # still 'success' so frontend doesn't see this as an error
+            success=True,
             connected=False,
             state="NO SWITCH",
             switches={},
         ), 200
 
-    # 2) Now we *know* the serial port is open → connected=True
-    connected = True
     switches = {}
     state_str = ""
+    connected = False
 
     try:
         with serial_lock:
@@ -1105,18 +1114,19 @@ def coax_status():
 
         state_str = (st.get("raw") or "").strip()
         sw = st.get("switches") or {}
-        if isinstance(sw, dict):
+
+        # Only treat as connected if it looks like our Pico protocol
+        if isinstance(sw, dict) and {"S1", "S2", "S3"} <= set(sw.keys()):
             switches = sw
-            if not connected_flag:
-                any_value = any(
-                    v not in (None, "")
-                    for v in switches.values()
-                )
-                if any_value:
-                    connected_flag = True
+            # Optional: also require that at least one switch has a non-empty value
+            connected = any(v not in (None, "", 0) for v in switches.values())
+        else:
+            connected = False
+
     except Exception as exc:  # noqa: BLE001
-        # Don't downgrade connected just because STATUS failed.
         state_str = f"ERROR: {exc}"
+        switches = {}
+        connected = False
 
     return jsonify(
         success=True,
@@ -1124,9 +1134,6 @@ def coax_status():
         state=state_str,
         switches=switches,
     ), 200
-
-
-
 
 
 # -----------------------------------------------------------------------------
