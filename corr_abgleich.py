@@ -30,8 +30,6 @@ if __name__ == "__main__":
     start_samp = round(2.4*fs)
     rx_start = rx[:start_samp]
     t_rx_start = np.arange(rx_start.size)/fs
-    # print(rx_start.size)
-    # print(tx.size)
     rx_start_fft = fft(rx_start)
     tx_start_fft = fft(tx, n=len(rx_start)).conj()
     start_corr = np.abs(ifft(rx_start_fft*tx_start_fft))

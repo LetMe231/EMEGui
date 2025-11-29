@@ -12,4 +12,4 @@ A = 4 * np.pi * r**2
 EIRPmax = S * A
 
 
-print(EIRPmax)
+print(EIRPmax) #-55dbm max
