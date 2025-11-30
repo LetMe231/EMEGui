@@ -22,17 +22,19 @@ NF = 10*np.log10(F)
 Loneway = -147.6 + 20*np.log10(363104000) + 20*np.log10(f)
 
 #https://hamradio.engineering/eme-path-loss-free-space-loss-passive-reflector-loss/
-r2 = 1737400**2
-EffA = 0.7*(2*np.pi*r2) #70% of Moons aperture are considered usefull
-MoonG = 10*np.log10((4*np.pi*EffA)/(c/f)**2)
+r = 1737400
+EffA = 0.7*(np.pi*r**2) #70% of Moons aperture are considered usefull
+MoonG = 10*np.log10(4*np.pi) + 10* np.log10(EffA) + 20*np.log10(f) - 20*np.log10(c)
 refcoeff = 0.065
 refL = 10*np.log10(refcoeff)
 
-Lp = 2 * Loneway - refL
-
 GainAnt = 26
+Prx = (((c/f)**2)/(4*np.pi)**3) * GainAnt**2 * (50/r**4) * EffA
+
+Lp = 10*np.log10((4*np.pi)**3) + 40*np.log10(r) + 20*np.log10(f) - 20*np.log10(c) - 10*np.log10(EffA) # S342 Eq. 10.4 PTx * G * G * Lp = PRx
+
 B = 10*np.log10(40)
 SNR = 0
-P0 = N0 + B + NF + SNR + Lp - 2*GainAnt - MoonG
+P0 = N0 + B + NF + SNR + Lp - 2*GainAnt
 
 print(P0)
