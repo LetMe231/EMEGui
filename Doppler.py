@@ -1,6 +1,7 @@
 import numpy as np
 import ephem 
 import datetime
+from CalcMoonPos import get_observer
 
 ftx = 1.296e9
 c = 299792458 #m/s
@@ -39,11 +40,7 @@ if __name__ == "__main__":
     ftx = 1296000000
     c = 299792458 #m/s  
 
-    obs = ephem.Observer()
-    obs.lat = '47.22373374577669'    
-    obs.lon = '8.817697327229048'    
-    obs.elevation = 409    
-    obs.date = ephem.now()
+    obs = get_observer()
 
     v = moon_vel(obs, 10)
 
