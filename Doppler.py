@@ -17,9 +17,9 @@ def moon_vel(obs, delta_s = 2.304):
     d = moon_dist(obs)
 
     obs2 = ephem.Observer()
-    obs2.lat = '47.22373374577669'    
-    obs2.lon = '8.817697327229048'    
-    obs2.elevation = 409    
+    obs2.lat = obs.lat    
+    obs2.lon = obs.lon    
+    obs2.elevation = obs.elevation   
     obs2.date = ephem.now() + ephem.second * delta_s
 
     d2 = moon_dist(obs2)
@@ -31,7 +31,9 @@ def doppler(f_tx, v_rel):
     return ((v_rel/c)*f_tx)/np.sqrt(1-(v_rel**2/c**2))
 
 def doppler_fitting(samp, f_doppler, Fs=20000):
-    return e^blabla
+    n = np.arange(len(samp))
+    f_corr = np.exp(-2j*np.pi*f_doppler*(n/Fs))
+    return samp * f_corr
 
 if __name__ == "__main__":
     ftx = 1296000000
