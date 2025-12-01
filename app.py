@@ -527,6 +527,40 @@ def connect():
     )
     return jsonify(success=True, status=state["status"])
 
+@app.route("/connect_public", methods=["POST"])
+@api_action
+def connect_public():
+    """
+    Public connect for the MD-01 controller.
+
+    - Used by the data-only view (no login required)
+    - Only opens the serial port and reads current position
+    """
+    global ant
+
+    port = request.form.get("port")
+    ant = SerialAntenna(port)
+    if not ant.status():
+        raise RuntimeError("Port could not be opened")
+
+    with serial_lock:
+        az, el = ant.read_md01_position()
+
+    state.update(
+        {
+            "port": port,
+            "connected": True,
+            "az": round(az, 1),
+            "az_norm": round(az % 360, 1),
+            "el": round(el, 1),
+        },
+    )
+    set_status(
+        "success",
+        f"[view] Connected with {port} (Az={az:.1f}°, El={el:.1f}°)",
+    )
+    return jsonify(success=True, status=state["status"])
+
 
 @app.route("/disconnect", methods=["POST"])
 @require_auth

@@ -39,7 +39,7 @@ body.app-body {
 }
 
 .glass-card .card-header {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0));
+  background: transparent;
   padding: 0.9rem 1.4rem;
 }
 
@@ -59,10 +59,6 @@ body.app-body {
   font-size: 1.4rem;
 }
 
-/* Dark mode toggle */
-.dark-toggle {
-  border-radius: 999px;
-}
 
 /* Connection dot */
 .connection-dot {
@@ -81,7 +77,7 @@ body.app-body {
 
 /* Canvases */
 canvas {
-  background: radial-gradient(circle at 30% 0%, rgba(255, 255, 255, 0.05), transparent 55%);
+  background: transparent;
   border-radius: 0.75rem;
   width: 100%;
   height: auto;
@@ -401,4 +397,80 @@ section {
   color: #fee2e2;
   border-color: #f97373;
   box-shadow: 0 0 10px rgba(248, 113, 113, 0.7);
+}
+
+/* RF schematic for coax switches -------------------------------------- */
+.coax-schematic-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+#rf-schematic {
+  background: #181820;
+  border-radius: 0.75rem;
+  border: 1px solid #333;
+  max-width: 100%;
+  height: auto;
+}
+
+#rf-schematic text {
+  fill: #ccc;
+  font-size: 11px;
+}
+
+#rf-schematic .title {
+  font-size: 14px;
+  font-weight: bold;
+  text-anchor: middle;
+}
+
+#rf-schematic .hint {
+  font-size: 10px;
+  fill: #999;
+  text-anchor: middle;
+}
+
+#rf-schematic .wire {
+  stroke: #555;
+  stroke-width: 2;
+  fill: none;
+}
+
+#rf-schematic .wire.active {
+  stroke: #00ff66;
+  stroke-width: 3;
+}
+
+#rf-schematic .switch-terminal {
+  fill: #222;
+  stroke: #bbb;
+  stroke-width: 1.2;
+}
+
+#rf-schematic .switch-com {
+  fill: #222;
+  stroke: #fff;
+  stroke-width: 1.4;
+}
+
+#rf-schematic .switch-handle {
+  stroke: #eee;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+#rf-schematic .switch-label {
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+#rf-schematic .amp-body {
+  fill: #222;
+  stroke: #aaa;
+  stroke-width: 1.5;
+}
+
+#rf-schematic .amp-label {
+  font-size: 10px;
+  text-anchor: middle;
 }

@@ -250,6 +250,41 @@ async function refreshStatus() {
     const disconnectBtn  = document.getElementById("disconnectBtn");
     const portSelect     = document.querySelector("#connectForm select[name='port']");
 
+
+        // ----- View-only connection card (data view) -----
+    const viewConnDot   = document.getElementById("conn-dot");
+    const viewConnLabel = document.getElementById("conn-label");
+    const viewPortText  = document.getElementById("view-port-text");
+    const viewConnectBtn = document.querySelector("#viewConnectForm button[type='submit']");
+    const viewPortSelect = document.querySelector("#viewConnectForm select[name='port']");
+
+    if (viewConnDot) {
+      // Reuse the same 'offline' class; your CSS already supports connection-dot.offline
+      if (data.connected) {
+        viewConnDot.classList.remove("offline");
+      } else {
+        viewConnDot.classList.add("offline");
+      }
+    }
+
+    if (viewConnLabel) {
+      viewConnLabel.textContent = data.connected ? "Connected" : "Not connected";
+    }
+
+    if (viewPortText) {
+      viewPortText.textContent = data.port || "—";
+    }
+
+    if (viewConnectBtn) {
+      // Disable the button when already connected
+      viewConnectBtn.disabled = !!data.connected;
+    }
+
+    if (viewPortSelect && data.port) {
+      viewPortSelect.value = data.port;
+    }
+
+
     // Dot: red/green
     if (connDot) {
       if (data.connected) {
@@ -352,11 +387,14 @@ async function refreshStatus() {
 }
 // ===== DARK MODE SYSTEM =====
 function isDarkMode() {
-  return document.body.classList.contains("dark-mode");
+  // We only support dark mode now
+  return true;
 }
 
 function applyThemeLabels() {
-  const dark = isDarkMode();
+  // If you still use data-label-light/dark on anything, keep this;
+  // otherwise you can even remove this function entirely.
+  const dark = true;
   document.querySelectorAll("[data-label-light]").forEach(el => {
     const txt = dark ? el.dataset.labelDark : el.dataset.labelLight;
     if (txt) {
@@ -367,16 +405,12 @@ function applyThemeLabels() {
   });
 }
 
-function setTheme(dark) {
-  document.body.classList.toggle("dark-mode", dark);
-  localStorage.setItem("darkMode", dark ? "dark" : "light");
+function setTheme() {
+  // Always dark mode
+  document.body.classList.add("dark-mode");
   applyThemeLabels();
-
-  // Redraw graphics with new colors if those functions exist
   if (typeof refreshStatus === "function") refreshStatus();
 }
-
-
 
 // ===== INIT & EVENT WIRING (single block) =====
 document.addEventListener("DOMContentLoaded", () => {
@@ -427,10 +461,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Dark mode toggle with forced darkmode at start
-  setTheme(true);
+  setTheme();
   localStorage.setItem("darkMode", "dark");
-  const darkBtn = document.getElementById("darkModeBtn");
-  if (darkBtn) darkBtn.addEventListener("click", () => setTheme(!isDarkMode()));
 
   // Connect
   const connectForm = document.getElementById("connectForm");
@@ -444,6 +476,22 @@ document.addEventListener("DOMContentLoaded", () => {
       refreshStatus();
     });
   }
+
+  // Public connect on data view (no login)
+const viewConnectForm = document.getElementById("viewConnectForm");
+if (viewConnectForm) {
+  viewConnectForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const res = await fetch("/connect_public", { method: "POST", body: formData });
+    const data = await res.json();
+    // Status bar might not exist on view.html, but this is safe:
+    updateStatusBar(data.status, data.success);
+    // Refresh everywhere so labels / dials update
+    refreshStatus();
+  });
+}
+
 
   // Disconnect
   const disconnectBtn = document.getElementById("disconnectBtn");
@@ -659,72 +707,6 @@ function updateCoaxButtonsFromState(switches, connected) {
   });
 }
 
-async function pollCoax() {
-  try {
-    const r = await fetch("/coax/status", { cache: "no-store" });
-    const j = await r.json();
-
-    const connected = !!j.connected;
-    const switches = j.switches || {};
-
-    // Build a nice summary like "S1=1 · S2=2 · S3=1"
-    const parts = [];
-    ["S1", "S2", "S3"].forEach((k) => {
-      const v = switches[k];
-      if (v !== undefined && v !== null && v !== "") {
-        parts.push(`${k}=${v}`);
-      }
-    });
-    const summary = parts.length ? " — " + parts.join(" · ") : "";
-
-    // Main status line in the card body
-    const statusEl = document.getElementById("coax-status");
-    if (statusEl) {
-      if (connected) {
-        // e.g. "Pico switch: online — S1=1 · S2=2 · S3=1"
-        statusEl.textContent = "Pico switch: online" + summary;
-        statusEl.classList.remove("text-danger");
-        statusEl.classList.add("text-success");
-      } else {
-        statusEl.textContent = "Pico switch: offline";
-        statusEl.classList.remove("text-success");
-        statusEl.classList.add("text-danger");
-      }
-    }
-
-    // Header indicator ("Coax Switches ● Online/Offline")
-    const connDot  = document.getElementById("coax-conn-dot");
-    const connText = document.getElementById("coax-conn-text");
-    if (connDot) {
-      if (connected) {
-        connDot.classList.add("online");
-      } else {
-        connDot.classList.remove("online");
-      }
-    }
-    if (connText) {
-      connText.textContent = connected ? "Online" : "Offline";
-    }
-
-    // Buttons (only exist on control page; view page just ignores this)
-    updateCoaxButtonsFromState(switches, connected);
-  } catch (e) {
-    const statusEl = document.getElementById("coax-status");
-    if (statusEl) {
-      statusEl.textContent = "Pico switch: offline";
-      statusEl.classList.remove("text-success");
-      statusEl.classList.add("text-danger");
-    }
-
-    const connDot  = document.getElementById("coax-conn-dot");
-    const connText = document.getElementById("coax-conn-text");
-    if (connDot) connDot.classList.remove("online");
-    if (connText) connText.textContent = "Offline";
-
-    updateCoaxButtonsFromState({}, false);
-  }
-}
-
 
 
 // keep polling
@@ -790,6 +772,9 @@ async function pollCoax() {
       });
     });
 
+    // -------- RF schematic (control + view, if present) --------
+    updateCoaxSchematic(switches, connected);
+
   } catch (e) {
     const statusEl = document.getElementById("coax-status");
     if (statusEl) {
@@ -803,7 +788,7 @@ async function pollCoax() {
     if (connDot) connDot.classList.remove("online");
     if (connText) connText.textContent = "Offline";
 
-    // Clear read-only pills
+    // Clear pills
     ["1", "2", "3"].forEach((sid) => {
       ["1", "2"].forEach((side) => {
         const pill = document.getElementById(`coax-view-${sid}-${side}`);
@@ -814,5 +799,240 @@ async function pollCoax() {
     });
 
     updateCoaxButtonsFromState({}, false);
+    updateCoaxSchematic({}, false);
   }
+}
+
+// keep polling
+setInterval(pollCoax, 2000);
+pollCoax();
+
+
+// ---------- RF schematic helpers (S1/S2/S3 from Pico) -------------------
+
+// Your original orientation helper: p1/p2 + left/right
+function setBladePosition(blade, orientation) {
+  if (!blade) return;
+  let x2, y2;
+  if (orientation === "p1-left") {
+    x2 = -50; y2 = -25;
+  } else if (orientation === "p2-left") {
+    x2 = -50; y2 = 25;
+  } else if (orientation === "p1-right") {
+    x2 = 50; y2 = -25;
+  } else { // "p2-right"
+    x2 = 50; y2 = 25;
+  }
+  blade.setAttribute("x1", "0");
+  blade.setAttribute("y1", "0");
+  blade.setAttribute("x2", String(x2));
+  blade.setAttribute("y2", String(y2));
+}
+
+// Convenience: layout = "left" | "right", state = "p1" | "p2"
+function setRfBlade(blade, layout, state) {
+  if (!blade) return;
+  const orientation =
+    state === "p1"
+      ? (layout === "left" ? "p1-left" : "p1-right")
+      : (layout === "left" ? "p2-left" : "p2-right");
+  setBladePosition(blade, orientation);
+}
+
+// Set a single wire's visual state: off / ok (green) / error (red)
+function setWireState(id, state) {
+  const wire = document.getElementById(id);
+  if (!wire) return;
+  wire.classList.remove("active", "error");
+
+  if (state === "ok") {
+    wire.classList.add("active");
+  } else if (state === "error") {
+    wire.classList.add("error");
+  }
+}
+
+// Turn TX / RX RF waves on/off
+function setRfWaves(txOn, rxOn) {
+  const tx = document.querySelectorAll("#rf-schematic .ant-wave-tx");
+  const rx = document.querySelectorAll("#rf-schematic .ant-wave-rx");
+
+  tx.forEach((w) => w.classList.toggle("active", !!txOn));
+  rx.forEach((w) => w.classList.toggle("active", !!rxOn));
+}
+
+// Highlight the RF path and decide if it's valid TX / RX
+// s1State/s2State/s3State are "p1"/"p2"; connected is boolean
+function highlightRfPath(s1State, s2State, s3State, connected) {
+  const wireIds = {
+    tx_to_pa:       "w_tx_to_pa",
+    pa_to_s1p1:     "w_pa_to_s1p1",
+    rx_to_s1p2:     "w_rx_to_s1p2",
+    s1com_to_s2com: "w_s1com_to_s2com",
+    s2p1_to_lna:    "w_s2p1_to_lna",
+    lna_to_s3p1:    "w_lna_to_s3p1",
+    s2p2_to_s3p2:   "w_s2p2_to_s3p2",
+    s3com_to_out:   "w_s3com_to_out",
+  };
+
+  function clearAll() {
+    Object.values(wireIds).forEach((id) => setWireState(id, "off"));
+    setRfWaves(false, false);
+  }
+
+  if (!connected || !s1State || !s2State || !s3State) {
+    clearAll();
+    return;
+  }
+
+  const sourceIsTx = s1State === "p1"; // S1=1 → TX
+  const sourceIsRx = s1State === "p2"; // S1=2 → RX
+
+  const path = {
+    tx_to_pa:       false,
+    pa_to_s1p1:     false,
+    rx_to_s1p2:     false,
+    s1com_to_s2com: false,
+    s2p1_to_lna:    false,
+    lna_to_s3p1:    false,
+    s2p2_to_s3p2:   false,
+    s3com_to_out:   false,
+  };
+
+  setRfWaves(false, false);
+
+  // --- S1: choose source (TX or RX) -------------------------------------
+  let sourceFeedsS1Com = false;
+
+  if (sourceIsTx) {
+    path.tx_to_pa   = true;
+    path.pa_to_s1p1 = true;
+    sourceFeedsS1Com = true;
+  } else if (sourceIsRx) {
+    path.rx_to_s1p2 = true;
+    sourceFeedsS1Com = true;
+  }
+
+  if (!sourceFeedsS1Com) {
+    clearAll();
+    return;
+  }
+
+  // --- S1 COM to S2 ------------------------------------------------------
+  path.s1com_to_s2com = true;
+
+  // --- S2: upper path (LNA) or lower bypass ------------------------------
+  let s2FeedsS3P1 = false;
+  let s2FeedsS3P2 = false;
+
+  if (s2State === "p1") {
+    path.s2p1_to_lna = true;
+    path.lna_to_s3p1 = true;
+    s2FeedsS3P1 = true;
+  } else if (s2State === "p2") {
+    path.s2p2_to_s3p2 = true;
+    s2FeedsS3P2 = true;
+  }
+
+  // --- S3: decide if we reach the antenna -------------------------------
+  let s3HasValidPathToOut = false;
+
+  if (s3State === "p1" && s2FeedsS3P1) {
+    path.s3com_to_out = true;
+    s3HasValidPathToOut = true;
+  }
+  if (s3State === "p2" && s2FeedsS3P2) {
+    path.s3com_to_out = true;
+    s3HasValidPathToOut = true;
+  }
+
+  // --- Valid combos (from your original logic) --------------------------
+  // Valid TX: S1=1 (p1), S2=2 (p2), S3=2 (p2)
+  const txConfigCorrect =
+    sourceIsTx &&
+    s1State === "p1" &&
+    s2State === "p2" &&
+    s3State === "p2";
+
+  // Valid RX: S1=2 (p2), S2=1 (p1), S3=1 (p1)
+  const rxConfigCorrect =
+    sourceIsRx &&
+    s1State === "p2" &&
+    s2State === "p1" &&
+    s3State === "p1";
+
+  const pathToAntennaIsCorrect =
+    s3HasValidPathToOut && (txConfigCorrect || rxConfigCorrect);
+
+  // --- Apply wire states -------------------------------------------------
+  Object.entries(wireIds).forEach(([key, id]) => {
+    if (!path[key]) {
+      setWireState(id, "off");
+      return;
+    }
+
+    if (s3HasValidPathToOut && !pathToAntennaIsCorrect) {
+      // We are feeding the antenna, but NOT in one of the allowed configs
+      setWireState(id, "error");
+    } else {
+      // Normal active (green)
+      setWireState(id, "ok");
+    }
+  });
+
+  // --- RF waves at antenna ----------------------------------------------
+  if (pathToAntennaIsCorrect) {
+    setRfWaves(sourceIsTx, sourceIsRx);
+  } else {
+    setRfWaves(false, false);
+  }
+}
+
+// Use Pico switch states to drive blades + path
+function updateCoaxSchematic(switches, connected) {
+  const svg = document.getElementById("rf-schematic");
+  if (!svg) return;
+
+  // switches is e.g. { S1: "1", S2: "2", S3: "1" }
+  const getVal = (sid) => {
+    if (!switches) return null;
+    const v = switches["S" + sid];
+    return v !== undefined && v !== null ? v : null;
+  };
+
+  const s1Val = getVal(1);
+  const s2Val = getVal(2);
+  const s3Val = getVal(3);
+
+  // Map Pico "1"/"2" to "p1"/"p2"
+  const mapToState = (v) => (v === "2" || v === 2 ? "p2" : "p1");
+
+  const s1State = s1Val ? mapToState(s1Val) : "p1";
+  const s2State = s2Val ? mapToState(s2Val) : "p1";
+  const s3State = s3Val ? mapToState(s3Val) : "p1";
+
+  const s1Blade = document.getElementById("s1_blade");
+  const s2Blade = document.getElementById("s2_blade");
+  const s3Blade = document.getElementById("s3_blade");
+
+  if (connected) {
+    // Match your SVG geometry:
+    // S1: ports LEFT, S2: ports RIGHT, S3: ports LEFT
+    setRfBlade(s1Blade, "left",  s1State);
+    setRfBlade(s2Blade, "right", s2State);
+    setRfBlade(s3Blade, "left",  s3State);
+  } else {
+    // Park everything to p1 (TX path) when offline
+    setRfBlade(s1Blade, "left",  "p1");
+    setRfBlade(s2Blade, "right", "p1");
+    setRfBlade(s3Blade, "left",  "p1");
+  }
+
+  // Highlight / animate RF path
+  highlightRfPath(
+    connected ? s1State : null,
+    connected ? s2State : null,
+    connected ? s3State : null,
+    connected
+  );
 }
