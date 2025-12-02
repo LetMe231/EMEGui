@@ -46,4 +46,4 @@ if __name__ == "__main__":
 
     frx = doppler(1296000000, v)
 
-    print(frx)
+    print(v)
