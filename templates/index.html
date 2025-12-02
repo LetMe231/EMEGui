@@ -137,7 +137,7 @@
                       type="number"
                       name="el"
                       min="0"
-                      max="90"
+                      max="100"
                       step="0.1"
                       value="{{ state.el }}"
                       class="form-control"
@@ -193,7 +193,7 @@
                     {% if not can_edit %}disabled{% endif %}
                   >
                   <label class="form-check-label" for="forceElChk">
-                    Force elevation below 15°
+                    Force tracking below 15°
                   </label>
                 </div>
                 <div class="small text-muted ms-auto">
@@ -209,7 +209,7 @@
       </div>
     </section>
 
-    <!-- Main cards row -->
+    <!-- Main cards row + measurement -->
     <section class="mb-4">
       <div class="row g-3">
 
@@ -236,7 +236,7 @@
           <div class="glass-card h-100">
             <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
               <span class="fw-semibold">Elevation Dial</span>
-              <span class="badge bg-dark-subtle text-light-emphasis small">0-90°</span>
+              <span class="badge bg-dark-subtle text-light-emphasis small">0–90°</span>
             </div>
             <div class="card-body">
               <canvas id="elCanvas" width="280" height="260" class="rounded"></canvas>
@@ -262,9 +262,10 @@
 
             <div class="card-body">
               <div id="camFsContainer" class="cam-fs-container rounded overflow-hidden position-relative">
+                <!-- IMPORTANT: src="/video.mjpg" directly -->
                 <img
                   id="camStream"
-                  src="/video.mjpg?ts=0"
+                  src=""
                   data-src="/video.mjpg"
                   alt="Camera stream"
                   class="camera-frame w-100"
@@ -421,6 +422,41 @@
         </div>
 
       </div>
+
+      <!-- NEW ROW: Moon distance measurement card -->
+      <div class="row g-3 mt-2">
+        <div class="col-xl-6 col-lg-8">
+          <div class="glass-card h-100">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">Moon Distance Measurement</span>
+              <span class="badge bg-secondary-subtle text-secondary-emphasis small">
+                Requires tracking &amp; lock
+              </span>
+            </div>
+            <div class="card-body d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+              <div class="text-start">
+                <p class="mb-1 small text-muted">
+                  Starts a transmit/receive sequence to measure the distance to the Moon.
+                </p>
+                <p class="mb-0 small text-muted">
+                  Enabled only when the rotor is connected, tracking, and locked on the Moon.
+                </p>
+              </div>
+              <div class="text-end">
+                <button
+                  id="measBtn"
+                  type="button"
+                  class="btn btn-outline-light btn-sm"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  Start measurement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
   </div>

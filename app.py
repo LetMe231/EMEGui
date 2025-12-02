@@ -839,6 +839,44 @@ def tracker():
     set_status("info", "Tracking and movement stopped")
     return jsonify(success=True, tracking=False, status=state["status"])
 
+# -----------------------------------------------------------------------------
+# Start a measurement
+# -----------------------------------------------------------------------------
+from flask import jsonify
+
+@app.post("/measurement/start")
+def measurement_start():
+    """
+    Placeholder endpoint to start a Moon distance measurement.
+
+    TODO (later):
+      - Check current controller state (connected, tracking, moon locked).
+      - If not in TX mode:
+          - command Pico coax: TX path (e.g. S1=1, S2=2, S3=2)
+      - Trigger TX pulse on the radio / PA.
+      - After pulse is sent, switch coax to RX path (e.g. S1=2, S2=1, S3=1).
+      - Arm receive chain, timestamp outgoing & incoming signals.
+      - Compute round-trip time Δt and distance d = c * Δt / 2.
+      - Store the result and expose it via /status or a dedicated endpoint.
+    """
+
+    # For now we just do a couple of basic sanity checks if you want:
+
+    # If you already have some global/state object, you can plug it here.
+    # For example (PSEUDO):
+    # if not state.connected:
+    #     return jsonify(success=False, status="Cannot start measurement: controller not connected"), 400
+    # if not state.tracking:
+    #     return jsonify(success=False, status="Cannot start measurement: tracking is off"), 400
+    # if not getattr(state, "locked", False):
+    #     return jsonify(success=False, status="Cannot start measurement: Moon not locked"), 400
+
+    return jsonify(
+        success=True,
+        status="Measurement sequence would start now (logic not implemented yet)."
+    )
+
+
 
 # -----------------------------------------------------------------------------
 # Stop / park

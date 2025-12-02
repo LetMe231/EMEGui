@@ -329,6 +329,8 @@ async function refreshStatus() {
     const elMoonText = document.getElementById("elMoonText");
     const trackerBtn = document.getElementById("trackerBtn");
     const forceChk   = document.getElementById("forceElChk");
+    const measBtn    = document.getElementById("measBtn");
+
 
     // Numbers under canvases
     if (azText) {
@@ -376,6 +378,35 @@ async function refreshStatus() {
         trackerBtn.classList.add("btn-success");
       }
     }
+
+    // Start measurement button: only when connected + tracking + (optionally) locked
+    if (measBtn) {
+      const trackingOn = !!data.tracking;
+
+      // If backend already provides a lock flag (e.g. data.locked),
+      // we require it; otherwise we treat it as "true" so you can test now.
+      const hasLockInfo = typeof data.locked === "boolean";
+      const moonLocked  = hasLockInfo ? !!data.locked : true;
+
+      const canMeasure =
+        !!data.connected &&
+        trackingOn &&
+        moonLocked &&
+        window.APP_CAN_EDIT;
+
+      measBtn.disabled = !canMeasure;
+
+      if (!trackingOn) {
+        measBtn.title = "Requires active tracking to the Moon";
+      } else if (!moonLocked) {
+        measBtn.title = "Requires Moon lock before measuring distance";
+      } else if (!data.connected) {
+        measBtn.title = "Controller not connected";
+      } else {
+        measBtn.title = "Start distance measurement to the Moon";
+      }
+    }
+
 
     // Redraw dials (ensure numeric/boolean types)
     drawAzimuth(+data.az, +data.az_moon, !!data.connected);
@@ -559,6 +590,30 @@ if (viewConnectForm) {
       const data = await res.json();
       updateStatusBar(data.status, data.success);
       refreshStatus();
+    });
+  }
+
+  // Start measurement
+  const measBtn = document.getElementById("measBtn");
+  if (measBtn) {
+    measBtn.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/measurement/start", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || data.success === false) {
+          const msg = data.status || data.error || "Measurement start failed";
+          updateStatusBar(msg, false);
+          return;
+        }
+
+        updateStatusBar(
+          data.status || "Measurement sequence started (placeholder)",
+          true
+        );
+      } catch (e) {
+        updateStatusBar(`Measurement error: ${e}`, false);
+      }
     });
   }
 
