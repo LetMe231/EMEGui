@@ -31,10 +31,10 @@ refL = 10*np.log10(refcoeff)
 GainAnt = 26
 Prx = (((c/f)**2)/(4*np.pi)**3) * GainAnt**2 * (50/r**4) * EffA
 
-Lp = 10*np.log10((4*np.pi)**3) + 40*np.log10(r) + 20*np.log10(f) - 20*np.log10(c) - 10*np.log10(EffA) # S342 Eq. 10.4 PTx * G * G * Lp = PRx
+Lp = 30*np.log10((4*np.pi)) + 40*np.log10(r) + 20*np.log10(f) - 20*np.log10(c) - 10*np.log10(EffA) # S342 Eq. 10.4 PTx * G * G * Lp = PRx
 
 B = 10*np.log10(40)
 SNR = 0
 P0 = N0 + B + NF + SNR + Lp - 2*GainAnt
 
-print(P0)
+print(Lp)
