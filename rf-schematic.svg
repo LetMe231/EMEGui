@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="rf-schematic" viewBox="0 0 820 320"
+     xmlns="http://www.w3.org/2000/svg">
+
+  <style>
+    #rf-schematic {
+      background: #0f172a;
+      border-radius: 0.75rem;
+    }
+
+    #rf-schematic text {
+      fill: #e5e7eb;
+      font-size: 11px;
+    }
+
+    #rf-schematic .title {
+      font-size: 14px;
+      font-weight: 600;
+      text-anchor: middle;
+      fill: #f9fafb;
+    }
+
+    #rf-schematic .hint {
+      font-size: 10px;
+      fill: #9ca3af;
+      text-anchor: middle;
+    }
+
+    #rf-schematic .wire {
+      stroke: #4b5563;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    #rf-schematic .switch-terminal {
+      fill: #020617;
+      stroke: #9ca3af;
+      stroke-width: 1.2;
+    }
+
+    #rf-schematic .switch-com {
+      fill: #020617;
+      stroke: #f9fafb;
+      stroke-width: 1.4;
+    }
+
+    #rf-schematic .switch-handle {
+      stroke: #e5e7eb;
+      stroke-width: 2;
+      stroke-linecap: round;
+    }
+
+    #rf-schematic .switch-label {
+      font-size: 11px;
+      text-anchor: middle;
+      fill: #e5e7eb;
+    }
+
+    #rf-schematic .amp-body {
+      fill: #020617;
+      stroke: #cbd5f5;
+      stroke-width: 1.5;
+    }
+
+    #rf-schematic .amp-label {
+      font-size: 10px;
+      text-anchor: middle;
+      fill: #e5e7eb;
+    }
+
+    .ant-wave {
+      fill: none;
+      stroke-width: 1.8;
+    }
+
+    .ant-wave-tx {
+      stroke: #22c55e;
+    }
+
+    .ant-wave-rx {
+      stroke: #38bdf8;
+      stroke-dasharray: 4 3;
+    }
+  </style>
+
+  <!-- TX and RX sources -->
+  <circle cx="70" cy="150" r="8" stroke="#aaa" stroke-width="1.5" fill="#222" />
+  <text x="70" y="135" text-anchor="middle">TX</text>
+
+  <circle cx="70" cy="200" r="8" stroke="#aaa" stroke-width="1.5" fill="#222" />
+  <text x="70" y="215" text-anchor="middle">RX</text>
+
+  <!-- TX -> PA -> S1 P1 (y = 150) -->
+  <path id="w_tx_to_pa" class="wire" d="M78 150 H 100" />
+
+  <!-- PA block -->
+  <g transform="translate(120,150)">
+    <rect class="amp-body" x="-20" y="-12" width="40" height="24" />
+    <text class="amp-label" x="0" y="4">PA</text>
+  </g>
+
+  <!-- PA output (140) to S1 P1 dot (170) -->
+  <path id="w_pa_to_s1p1" class="wire" d="M140 150 H 170" />
+
+  <!-- RX -> S1 P2 (y = 200) to S1 P2 dot at x=170 -->
+  <path id="w_rx_to_s1p2" class="wire" d="M78 200 H 170" />
+
+  <!-- Switch 1 at (220,175) – ports LEFT, COM center -->
+  <g id="switch1" class="switch" data-state="p1" transform="translate(220,175)">
+    <circle class="switch-terminal" cx="-50" cy="-25" r="3" />
+    <circle class="switch-terminal" cx="-50" cy="25"  r="3" />
+    <circle class="switch-com"     cx="0"   cy="0"   r="3.5" />
+    <line id="s1_blade" class="switch-handle" x1="0" y1="0" x2="-50" y2="-25" />
+    <text class="switch-label" x="0" y="-60">S1</text>
+  </g>
+
+  <!-- S1 COM to S2 COM -->
+  <path id="w_s1com_to_s2com" class="wire" d="M224 175 H 415" />
+
+  <!-- Switch 2 at (415,175) – ports RIGHT, COM center -->
+  <g id="switch2" class="switch" data-state="p1" transform="translate(415,175)">
+    <circle class="switch-terminal" cx="50" cy="-25" r="3" />
+    <circle class="switch-terminal" cx="50" cy="25"  r="3" />
+    <circle class="switch-com"     cx="0"  cy="0"   r="3.5" />
+    <line id="s2_blade" class="switch-handle" x1="0" y1="0" x2="50" y2="-25" />
+    <text class="switch-label" x="0" y="-60">S2</text>
+  </g>
+
+  <!-- S2 P1 dot at (465,150) -> LNA -->
+  <path id="w_s2p1_to_lna" class="wire" d="M465 150 H 525" />
+
+  <!-- LNA block -->
+  <g transform="translate(545,150)">
+    <rect class="amp-body" x="-20" y="-12" width="40" height="24" />
+    <text class="amp-label" x="0" y="4">LNA</text>
+  </g>
+
+  <!-- LNA output (565) to S3 P1 dot (625) -->
+  <path id="w_lna_to_s3p1" class="wire" d="M565 150 H 625" />
+
+  <!-- S2 P2 dot at (465,200) to S3 P2 dot at (625,200) -->
+  <path id="w_s2p2_to_s3p2" class="wire" d="M465 200 H 625" />
+
+  <!-- Switch 3 at (675,175) – ports LEFT, COM center -->
+  <g id="switch3" class="switch" data-state="p1" transform="translate(675,175)">
+    <circle class="switch-terminal" cx="-50" cy="-25" r="3" />
+    <circle class="switch-terminal" cx="-50" cy="25"  r="3" />
+    <circle class="switch-com"     cx="0"   cy="0"   r="3.5" />
+    <line id="s3_blade" class="switch-handle" x1="0" y1="0" x2="-50" y2="-25" />
+    <text class="switch-label" x="0" y="-60">S3</text>
+  </g>
+
+  <!-- S3 COM to antenna node at x=750 -->
+  <path id="w_s3com_to_out" class="wire" d="M679 175 H 750" />
+
+  <!-- Antenna symbol + waves at output -->
+  <g id="antenna" transform="translate(750,175)">
+    <!-- vertical mast -->
+    <line x1="0" y1="0" x2="0" y2="-18" stroke="#ccc" stroke-width="2" />
+    <!-- two slanted arms -->
+    <line x1="0" y1="-18" x2="-10" y2="-28" stroke="#ccc" stroke-width="2" />
+    <line x1="0" y1="-18" x2="10"  y2="-28" stroke="#ccc" stroke-width="2" />
+    <text x="0" y="-32" text-anchor="middle">ANT</text>
+
+    <!-- TX waves -->
+    <g id="ant_tx_group">
+      <path class="ant-wave ant-wave-tx" d="M6  -30 Q 20 -40 34 -34" />
+      <path class="ant-wave ant-wave-tx" d="M9  -36 Q 26 -48 43 -40" />
+      <path class="ant-wave ant-wave-tx" d="M12 -42 Q 32 -56 52 -48" />
+    </g>
+
+    <!-- RX waves -->
+    <g id="ant_rx_group">
+      <path class="ant-wave ant-wave-rx" d="M12 -42 Q 32 -56 52 -48" />
+      <path class="ant-wave ant-wave-rx" d="M9  -36 Q 26 -48 43 -40" />
+      <path class="ant-wave ant-wave-rx" d="M6  -30 Q 20 -40 34 -34" />
+    </g>
+  </g>
+</svg>

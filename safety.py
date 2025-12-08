@@ -9,7 +9,8 @@ S = E**2 / Z0
 
 A = 4 * np.pi * r**2
 
-EIRPmax = S * A
+EIRPmax = S * A * 1000
 
 
-print(EIRPmax) #-55dbm max
+print(EIRPmax) #-55dbW max
+print(10*np.log10(EIRPmax))

@@ -6,8 +6,10 @@ f = 1.296e9
 P = 10*np.log10(50000)
 N0 = -174
 
-L1 = 10**((1.5 + 1.95 + 0.14)/10) #alle 3 Kabel von antenne bis LNA + Limiter (5fuss & 7.5m angenommen)
-L2 = 10**((3.9 + 1.2)/10) #beide Kabel von LNA bis usrp (15m und 4fuss)
+# L1 = 10**((1.5 + 1.95 + 0.14)/10) #alle 3 Kabel von antenne bis LNA + Limiter (5fuss & 7.5m angenommen)
+L1 = 10**((3.4)/10) #alle 3 Kabel von antenne bis LNA + Limiter (5fuss & 7.5m angenommen) gemessen
+
+L2 = 10**((1.15)/10) #beide Kabel von LNA bis usrp (15m und 4fuss) gemessen
 
 Flna = 10**(0.46/10) # NF to F von LNA
 Glna = 10**(15/10)
@@ -23,15 +25,15 @@ Loneway = -147.6 + 20*np.log10(363104000) + 20*np.log10(f)
 
 #https://hamradio.engineering/eme-path-loss-free-space-loss-passive-reflector-loss/
 r = 1737400
-EffA = (np.pi*r**2) #70% of Moons aperture are considered usefull
+EffA = (np.pi*r**2) 
 MoonG = 10*np.log10(4*np.pi) + 10* np.log10(EffA) + 20*np.log10(f) - 20*np.log10(c)
 refcoeff = 0.065
 refL = 10*np.log10(refcoeff)
 
 GainAnt = 26
-Prx = (((c/f)**2)/(4*np.pi)**3) * GainAnt**2 * (50/r**4) * EffA
+# Prx = (((c/f)**2)/(4*np.pi)**3) * GainAnt**2 * (50/r**4) * EffA
 
-Lp = 20*np.log10((4*np.pi)) + 40*np.log10(r) + 20*np.log10(f) - 20*np.log10(c) - 10*np.log10(EffA) # S342 Eq. 10.4 PTx * G * G * Lp = PRx
+# Lp = 20*np.log10((4*np.pi)) + 40*np.log10(r) + 20*np.log10(f) - 20*np.log10(c) - 10*np.log10(EffA) # S342 Eq. 10.4 PTx * G * G * Lp = PRx
 
 lam = (c/f)
 G_lin = EffA/((lam**2)/(4*np.pi))
