@@ -535,6 +535,49 @@ if (viewConnectForm) {
     });
   }
 
+    // Pico coax connect
+  const coaxConnectForm = document.getElementById("coaxConnectForm");
+  const coaxConnectBtn  = document.getElementById("coaxConnectBtn");
+  const coaxDisconnectBtn = document.getElementById("coaxDisconnectBtn");
+
+  if (coaxConnectForm) {
+    coaxConnectForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!window.APP_CAN_EDIT) return;
+
+      const formData = new FormData(e.target);
+      try {
+        const res = await fetch("/coax/connect", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        updateStatusBar(data.status || (data.success ? "Pico connected" : "Pico connect failed"), data.success);
+      } catch (err) {
+        updateStatusBar("Pico connect error: " + err, false);
+      }
+      // Refresh Pico + overall state
+      refreshStatus();
+      pollCoax();
+    });
+  }
+
+  if (coaxDisconnectBtn) {
+    coaxDisconnectBtn.addEventListener("click", async () => {
+      if (!window.APP_CAN_EDIT) return;
+      try {
+        const res = await fetch("/coax/disconnect", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        updateStatusBar(data.status || (data.success ? "Pico disconnected" : "Pico disconnect failed"), data.success);
+      } catch (err) {
+        updateStatusBar("Pico disconnect error: " + err, false);
+      }
+      refreshStatus();
+      pollCoax();
+    });
+  }
+
+
   // Set position
   const setForm = document.getElementById("setForm");
   if (setForm) {
@@ -762,11 +805,24 @@ function updateCoaxButtonsFromState(switches, connected) {
   });
 }
 
+    // ----- Pico coax connection UI (COM + buttons) -----
+    const coaxPortText       = document.getElementById("coax-port-text");
+    const coaxConnectBtn     = document.getElementById("coaxConnectBtn");
+    const coaxDisconnectBtn  = document.getElementById("coaxDisconnectBtn");
 
+    if (coaxPortText) {
+      coaxPortText.textContent = data.switch_port || "—";
+    }
 
-// keep polling
-setInterval(pollCoax, 2000);
-pollCoax();
+    if (coaxConnectBtn) {
+      // Disable connect when already connected, or in view-only mode
+      coaxConnectBtn.disabled = !!data.switch_connected || !window.APP_CAN_EDIT;
+    }
+
+    if (coaxDisconnectBtn) {
+      // Disable disconnect when not connected, or in view-only mode
+      coaxDisconnectBtn.disabled = !data.switch_connected || !window.APP_CAN_EDIT;
+    }
 
 async function pollCoax() {
   try {

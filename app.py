@@ -62,8 +62,8 @@ tracking_thread: Optional[threading.Thread] = None
 tracking_stop = threading.Event()
 
 # Pico switch auto-detection
-SWITCH_PORT_ENV = "SWITCH_PORT"     # optional override, e.g. "COM5"
-SWITCH_PORT_DEFAULT = ""            # optional hard-coded fallback; "" = disabled
+SWITCH_PORT_ENV = "COM14"     # optional override, e.g. "COM5"
+SWITCH_PORT_DEFAULT = "COM14"            # optional hard-coded fallback; "" = disabled
 switch: Optional[SerialSwitch] = None
 
 
@@ -99,6 +99,8 @@ state: Dict[str, Any] = {
     "el_moon": 0.0,
     "tracking": False,
     "port": None,
+    "switch_port": None,
+    "switch_connected": False,
     "switches": {
         "S1": 0,
         "S2": 0,
@@ -974,201 +976,184 @@ def video_mjpg():
 # Coax switch helpers / routes
 # -----------------------------------------------------------------------------
 
-def find_pico_port() -> Optional[str]:
+import serial  # at top of file, if not already
+
+def probe_pico_port(port: str, timeout: float = 1.0) -> dict:
     """
-    Detect Pico COM port.
+    Open 'port', send STATUS, and verify we get a Pico-style reply:
 
-    Priority:
-      1) env var SWITCH_PORT (if set)
-      2) SWITCH_PORT_DEFAULT constant
-      3) auto-scan for Pico VID / description
+        STATE S1=1 S2=2 S3=1
+
+    Returns a switches dict like {"S1": "1", "S2": "1", "S3": "1"}
+    or raises RuntimeError if the port is not our Pico.
     """
-    env_port = os.getenv(SWITCH_PORT_ENV)
-    if env_port:
-        return env_port
+    ser = None
+    try:
+        # Adjust baudrate if your Pico uses something else
+        ser = serial.Serial(port, baudrate=115200, timeout=0.3)
 
-    if SWITCH_PORT_DEFAULT:
-        return SWITCH_PORT_DEFAULT
+        # Flush any garbage / boot messages
+        try:
+            ser.reset_input_buffer()
+            ser.reset_output_buffer()
+        except Exception:
+            pass
 
-    # (optional) auto-scan, if you want to keep it:
-    import serial.tools.list_ports
-    for p in serial.tools.list_ports.comports():
-        desc = (p.description or "").lower()
-        if p.vid == 0x2E8A or "pico" in desc or "raspberry" in desc:
-            return p.device
+        # Send STATUS
+        ser.write(b"STATUS\r\n")
+        ser.flush()
 
-    return None
+        t0 = time.time()
+        switches: dict[str, str] = {}
+
+        while time.time() - t0 < timeout:
+            line = ser.readline()
+            if not line:
+                continue
+
+            text = line.decode(errors="ignore").strip().upper()
+
+            # Ignore your "Ready: commands ..." banner etc.
+            if not text.startswith("STATE "):
+                continue
+
+            # Expect: STATE S1=1 S2=2 S3=1
+            parts = text.split()
+            for part in parts[1:]:
+                if "=" not in part:
+                    continue
+                k, v = part.split("=", 1)
+                if k in ("S1", "S2", "S3") and v in ("1", "2"):
+                    switches[k] = v
+
+            if {"S1", "S2", "S3"} <= set(switches.keys()):
+                return switches
+
+            raise RuntimeError(f"Bad STATE line on {port!r}: {text!r}")
+
+        raise RuntimeError(f"No STATE reply within timeout on {port!r}")
+
+    finally:
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                pass
 
 
-
-
-def auto_connect_switch(quiet: bool = False) -> bool:
+@app.route("/coax/connect", methods=["POST"])
+@require_auth
+@api_action
+def coax_connect():
     """
-    Try to auto-connect the coax switch.
+    Manually connect to the Pico coax switch on the selected serial port.
 
-    Strategy:
-      1) If an existing switch looks healthy, keep it.
-      2) Try env var SWITCH_PORT (if set).
-      3) Try SWITCH_PORT_DEFAULT (if non-empty).
-      4) Try auto-detected Pico port by VID/description.
+    - Opens the port with pyserial
+    - Sends STATUS and parses "STATE S1=.. S2=.. S3=.."
+    - Only on success creates SerialSwitch and marks as connected
     """
     global switch
 
-    # If we already have a working switch, don't thrash.
-    if switch is not None:
-        try:
-            if (
-                getattr(switch, "ser", None)
-                and switch.ser.is_open
-                and getattr(switch, "connected", True)
-            ):
-                return True
-        except Exception:
-            # drop broken instance
-            switch = None
-
-    candidate_ports: list[str] = []
-
-    # 1) Env override
-    env_port = os.getenv(SWITCH_PORT_ENV)
-    if env_port:
-        candidate_ports.append(env_port)
-
-    # 2) Hardcoded default (optional)
-    if SWITCH_PORT_DEFAULT and SWITCH_PORT_DEFAULT not in candidate_ports:
-        candidate_ports.append(SWITCH_PORT_DEFAULT)
-
-    # 3) Auto-detected Pico
-    pico_port = find_pico_port()
-    if pico_port and pico_port not in candidate_ports:
-        candidate_ports.append(pico_port)
-
-    if not candidate_ports:
-        if not quiet:
-            set_status("warning", "Pico switch not found on any COM port")
-        switch = None
-        return False
-
-    last_exc: Optional[Exception] = None
-
-    for port in candidate_ports:
-        try:
-            with serial_lock:
-                switch = SerialSwitch(port)
-            if not quiet:
-                set_status("success", f"Switch connected on {port}")
-            return True
-        except Exception as exc:  # noqa: BLE001
-            last_exc = exc
-            switch = None
-
-    if not quiet:
-        msg = "Pico switch not found on any COM port"
-        if last_exc:
-            msg += f" (last error: {last_exc})"
-        set_status("warning", msg)
-
-    return False
-
-
-
-def ensure_switch_connected(quiet: bool = False) -> bool:
-    global switch
-
-    # Drop broken / closed instances
-    if switch is not None:
-        try:
-            if not switch.ser or not switch.ser.is_open:
-                switch = None
-        except Exception:
-            switch = None
-
-    # If we don't have a switch, try to create one
-    if switch is None:
-        port = find_pico_port()
-        if not port:
-            if not quiet:
-                set_status("warning", "No Pico switch port found")
-            return False
-        try:
-            with serial_lock:
-                sw = SerialSwitch(port)
-
-                # Probe once to make sure it’s *our* Pico firmware
-                st = sw.status_parsed()
-                sw_dict = st.get("switches") or {}
-                if not (isinstance(sw_dict, dict) and {"S1", "S2", "S3"} <= set(sw_dict.keys())):
-                    # Not our device → close and fail
-                    try:
-                        sw.ser.close()
-                    except Exception:
-                        pass
-                    if not quiet:
-                        set_status("warning", f"Port {port} is not a Pico coax switch")
-                    return False
-
-                switch = sw
-
-            if not quiet:
-                set_status("success", f"Pico switch connected on {port}")
-        except Exception as exc:
-            switch = None
-            if not quiet:
-                set_status("error", f"Failed to open Pico switch on {port}: {exc}")
-            return False
+    port = request.form.get("port")
+    if not port:
+        set_status("error", "No switch COM port selected")
+        return jsonify(success=False, status=state["status"]), 400
 
     try:
-        return bool(switch and switch.ser and switch.ser.is_open)
-    except Exception:
+        # 1) HARD PROBE: must look like our Pico
+        switches_dict = probe_pico_port(port)
+
+        # 2) Now that we know it is our firmware, create the high-level wrapper
+        with serial_lock:
+            sw = SerialSwitch(port)
+        switch = sw
+
+        state["switch_port"] = port
+        state["switch_connected"] = True
+        # Initialize global switches with what we saw in the first STATUS
+        state["switches"] = switches_dict
+
+        set_status("success", f"Pico switch connected on {port}")
+        return jsonify(success=True, status=state["status"])
+
+    except Exception as exc:
         switch = None
-        return False
+        state["switch_port"] = None
+        state["switch_connected"] = False
+        set_status("error", f"Failed to connect Pico switch on {port}: {exc}")
+        return jsonify(success=False, status=state["status"]), 500
 
 
 
+@app.route("/coax/disconnect", methods=["POST"])
+@require_auth
+@api_action
+def coax_disconnect():
+    """
+    Disconnect from the Pico coax switch.
+    """
+    global switch
+
+    if switch is not None:
+        try:
+            with serial_lock:
+                if getattr(switch, "ser", None):
+                # close if possible
+                    switch.ser.close()
+        except Exception:
+            pass
+        switch = None
+
+    state["switch_port"] = None
+    state["switch_connected"] = False
+    state["switches"] = {"S1": 0, "S2": 0, "S3": 0}
+
+    set_status("info", "Pico switch disconnected")
+    return jsonify(success=True, status=state["status"])
 
 
 @app.route("/coax/<int:sid>/<side>", methods=["POST"])
 @require_auth
 @api_action
 def coax_set(sid: int, side: str):
-    """
-    Set a coax switch position.
-
-    sid:
-        1, 2, or 3
-    side:
-        "1" or "2"
-    """
     global switch
 
     side = str(side).strip()
     if sid not in (1, 2, 3) or side not in ("1", "2"):
         return jsonify(success=False, error="Invalid command"), 400
 
-    # Loud: for user actions we want to see errors in status bar.
-    if not ensure_switch_connected(quiet=False):
-        return jsonify(success=False, error="Not connected"), 500
+    if not (
+        switch
+        and getattr(switch, "ser", None)
+        and switch.ser.is_open
+        and state.get("switch_connected")
+    ):
+        set_status("error", "Pico switch not connected")
+        return jsonify(success=False, status=state["status"]), 500
 
     with serial_lock:
         resp = switch.set(sid, side)
 
-    return jsonify(success=True, state=resp)
+    sw = resp.get("switches") if isinstance(resp, dict) else None
+    if isinstance(sw, dict):
+        state["switches"].update(sw)
+
+    return jsonify(success=True, state=resp, status="Coax command sent")
+
 
 
 @app.route("/coax/status")
 @api_action
 def coax_status():
     """
-    Quiet status endpoint for coax switch.
+    Status endpoint for coax switch.
 
-    - Never updates main status bar.
-    - Always returns HTTP 200.
-    - Says connected=True ONLY if we can successfully read & parse STATUS.
+    - Does not try to auto-connect.
+    - Says connected=True ONLY if we have an open switch and can read STATUS.
     """
     global switch
 
-    # 1) Ensure we have an open switch on some port
-    if not ensure_switch_connected(quiet=True) or switch is None:
+    if not (switch and getattr(switch, "ser", None) and switch.ser.is_open):
         return jsonify(
             success=True,
             connected=False,
@@ -1187,11 +1172,9 @@ def coax_status():
         state_str = (st.get("raw") or "").strip()
         sw = st.get("switches") or {}
 
-        # Only treat as connected if it looks like our Pico protocol
         if isinstance(sw, dict) and {"S1", "S2", "S3"} <= set(sw.keys()):
             switches = sw
-            # Optional: also require that at least one switch has a non-empty value
-            connected = any(v not in (None, "", 0) for v in switches.values())
+            connected = True
         else:
             connected = False
 
@@ -1208,6 +1191,7 @@ def coax_status():
     ), 200
 
 
+
 # -----------------------------------------------------------------------------
 # App entry point
 # -----------------------------------------------------------------------------
@@ -1220,10 +1204,6 @@ def open_browser() -> None:
 if __name__ == "__main__":
     # Background poller for antenna / Moon.
     threading.Thread(target=poll_loop, daemon=True).start()
-    try:
-        auto_connect_switch(quiet=False)
-    except Exception as exc:  # noqa: BLE001
-        print("ERROR during initial switch auto-connect:", exc)
 
     threading.Timer(1, open_browser).start()
     # IMPORTANT: allow concurrent requests, so serial I/O won't freeze the UI

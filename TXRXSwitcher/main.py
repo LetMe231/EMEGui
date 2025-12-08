@@ -5,12 +5,12 @@ import time
 # -----------------------------
 #  GPIO CONFIG
 # -----------------------------
-S1_1 = Pin(22, Pin.OUT)
-S1_2 = Pin(21, Pin.OUT)
-S2_1 = Pin(18, Pin.OUT)
-S2_2 = Pin(17, Pin.OUT)
-S3_1 = Pin(13, Pin.OUT)
-S3_2 = Pin(14, Pin.OUT)
+S1_1 = Pin(21, Pin.OUT)
+S1_2 = Pin(20, Pin.OUT)
+S2_1 = Pin(19, Pin.OUT)
+S2_2 = Pin(18, Pin.OUT)
+S3_1 = Pin(17, Pin.OUT)
+S3_2 = Pin(16, Pin.OUT)
 
 coils = {
     "S1_1": S1_1, "S1_2": S1_2,
@@ -39,7 +39,7 @@ for c in coils.values():
 def pulse(coil_pin):
     # short active-LOW pulse
     coil_pin.value(COIL_ON)
-    time.sleep_ms(100)
+    time.sleep_ms(50)
     coil_pin.value(COIL_OFF)
 
 def set_switch(sid, side):
