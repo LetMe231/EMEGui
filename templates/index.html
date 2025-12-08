@@ -349,6 +349,42 @@
 
               <div id="coax-status" class="small mb-2 text-start"></div>
 
+              <!-- Pico connection controls -->
+              <form id="coaxConnectForm" class="d-flex gap-2 mb-2">
+                <select
+                  name="port"
+                  class="form-select form-select-sm"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  {% for p in ports %}
+                    <option value="{{ p }}" {% if state.switch_port == p %}selected{% endif %}>
+                      {{ p }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button
+                  id="coaxConnectBtn"
+                  type="submit"
+                  class="btn btn-success btn-sm"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  Connect
+                </button>
+                <button
+                  id="coaxDisconnectBtn"
+                  type="button"
+                  class="btn btn-outline-danger btn-sm"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  Disconnect
+                </button>
+              </form>
+
+              <div class="small text-muted mb-2 text-start">
+                Port: <span class="fw-semibold" id="coax-port-text">{{ state.switch_port or "—" }}</span>
+              </div>
+
+
               <div class="coax-grid">
                 <div class="coax-row">
                   <span class="coax-label">S1</span>
