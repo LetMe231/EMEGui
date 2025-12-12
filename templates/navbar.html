@@ -1,0 +1,70 @@
+<header class="mb-3">
+  <nav class="navbar navbar-expand-lg navbar-dark bg-transparent">
+    <div class="container-fluid px-0">
+      <!-- Brand -->
+      <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+        <div class="logo-pill">
+          <span class="logo-dot"></span>
+          <span class="logo-text">EME</span>
+        </div>
+        <span class="fw-bold">MD-01</span>
+      </a>
+
+      <!-- Toggler for small screens -->
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+              aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse justify-content-between" id="mainNav">
+        <!-- Left: navigation links -->
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+          {% set current = request.endpoint %}
+
+          <li class="nav-item">
+            <a
+              class="nav-link {% if current in ('index',) %}active{% endif %}"
+              href="{{ url_for('index') }}"
+            >
+              Data view
+            </a>
+          </li>
+
+          <li class="nav-item">
+            <a
+              class="nav-link {% if current in ('control',) %}active{% endif %}"
+              href="{{ url_for('control') }}"
+            >
+              Control
+            </a>
+          </li>
+
+          <li class="nav-item">
+            <a
+              class="nav-link {% if current in ('data_page',) %}active{% endif %}"
+              href="{{ url_for('data_page') }}"
+            >
+              EME data
+            </a>
+          </li>
+        </ul>
+
+        <!-- Right: auth controls -->
+        <div class="d-flex align-items-center gap-2">
+          {% if can_edit %}
+            <span class="text-success small me-2">Control unlocked</span>
+            <form action="{{ url_for('logout') }}" method="post" class="m-0">
+              <button type="submit" class="btn btn-outline-light btn-sm">
+                Logout
+              </button>
+            </form>
+          {% else %}
+            <a href="{{ url_for('control') }}" class="btn btn-outline-success btn-sm">
+              Control login
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </nav>
+</header>

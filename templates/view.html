@@ -152,79 +152,131 @@
 
 <body class="app-body text-center dark-mode">
   <div class="app-shell container-fluid py-3">
-    <!-- Top bar -->
-    <header class="d-flex justify-content-between align-items-center mb-3">
+
+    <!-- Top bar with logo, nav, and both connect blocks -->
+    <header class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
+
+      <!-- Left: logo + antenna icon -->
       <div class="d-flex align-items-center gap-3 text-start">
-        <div class="logo-pill">
+        <div class="logo-pill d-flex align-items-center gap-2">
           <span class="logo-dot"></span>
           <span class="logo-text">EME</span>
+          <!-- small antenna icon -->
+          <svg width="28" height="24" viewBox="0 0 28 24" aria-hidden="true">
+            <g stroke="#38bdf8" stroke-width="1.5" fill="none" stroke-linecap="round">
+              <line x1="14" y1="22" x2="14" y2="10" />
+              <line x1="14" y1="10" x2="8" y2="4" />
+              <line x1="14" y1="10" x2="20" y2="4" />
+              <path d="M5 3 Q 14 -2 23 3" stroke-opacity="0.7" />
+              <path d="M2 5 Q 14 -4 26 5" stroke-opacity="0.4" />
+            </g>
+          </svg>
         </div>
         <div class="text-start">
-          <h1 class="h4 mb-0 fw-bold">MD-01 Dashboard</h1>
+          <h1 class="h5 mb-0 fw-bold">MD-01 Dashboard</h1>
           <small class="text-muted d-block">Live data · read-only</small>
         </div>
       </div>
 
-      <div class="d-flex align-items-center gap-2">
-        <a href="{{ url_for('control') }}" class="btn btn-outline-success btn-sm">
-          Control login
+      <!-- Middle: navigation between pages -->
+      <nav class="d-flex align-items-center gap-2 flex-wrap">
+        <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-light active">
+          Data
         </a>
+        <a href="{{ url_for('control') }}" class="btn btn-sm btn-outline-light">
+          Control
+        </a>
+      </nav>
+
+      <!-- Right: MD-01 connect + Pico coax connect -->
+      <div class="d-flex align-items-center gap-4 flex-wrap justify-content-end">
+
+        <!-- MD-01 connect (public) -->
+        <div class="d-flex align-items-center gap-2">
+          <span class="connection-pill me-1">
+            <span class="connection-dot" id="conn-dot"></span>
+            <span class="small" id="conn-label">
+              {{ "Connected" if state.connected else "Not connected" }}
+            </span>
+          </span>
+
+          <form id="viewConnectForm" class="d-flex align-items-center gap-2">
+            {% set preferred = "COM7" %}
+            <select name="port" class="form-select form-select-sm">
+              {# Prefer COM7 if present #}
+              {% if preferred in ports %}
+                <option value="{{ preferred }}"
+                  {% if state.port == preferred or not state.port %}selected{% endif %}>
+                  {{ preferred }}
+                </option>
+              {% endif %}
+              {% for p in ports %}
+                {% if p != preferred %}
+                  <option value="{{ p }}"
+                    {% if state.port == p %}selected{% endif %}>
+                    {{ p }}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+
+            <span class="small text-muted">
+              Port:
+              <span id="view-port-text">{{ state.port or (preferred if preferred in ports else "—") }}</span>
+            </span>
+
+            <button type="submit" class="btn btn-outline-success btn-sm">
+              Connect
+            </button>
+          </form>
+        </div>
+
+        <!-- Pico coax connect (will still require login; backend enforces it) -->
+        <div class="d-flex align-items-center gap-2">
+          <span class="small text-muted">Pico:</span>
+          <form id="coaxConnectForm" class="d-flex align-items-center gap-2">
+            {% set preferred_sw = "COM7" %}
+            <select name="port" class="form-select form-select-sm">
+              {% if preferred_sw in ports %}
+                <option value="{{ preferred_sw }}"
+                  {% if state.switch_port == preferred_sw or not state.switch_port %}selected{% endif %}>
+                  {{ preferred_sw }}
+                </option>
+              {% endif %}
+              {% for p in ports %}
+                {% if p != preferred_sw %}
+                  <option value="{{ p }}"
+                    {% if state.switch_port == p %}selected{% endif %}>
+                    {{ p }}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+
+            <span class="small text-muted">
+              Port:
+              <span id="coax-port-text">{{ state.switch_port or (preferred_sw if preferred_sw in ports else "—") }}</span>
+            </span>
+
+            <button id="coaxConnectBtn" type="submit" class="btn btn-outline-info btn-sm">
+              Connect
+            </button>
+            <button id="coaxDisconnectBtn" type="button" class="btn btn-outline-danger btn-sm">
+              Disconnect
+            </button>
+          </form>
+        </div>
+
       </div>
     </header>
 
     <!-- Main content -->
-    <section class="mt-3">
-      <!-- Top row: connection + dials + camera -->
+    <section class="mt-2">
+      <!-- Top row: dials + camera (no more connection card here) -->
       <div class="row g-3 mb-3">
-        <!-- Connection / Status -->
-        <div class="col-xl-3 col-lg-6">
-          <div class="glass-card h-100">
-            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
-              <span class="fw-semibold">Connection</span>
-              <span class="connection-pill">
-                <span class="connection-dot" id="conn-dot"></span>
-                <span class="small" id="conn-label">
-                  {{ "Connected" if state.connected else "Not connected" }}
-                </span>
-              </span>
-            </div>
-            <div class="card-body text-start">
-              <p class="mb-1">
-                <span class="text-muted">Port:</span>
-                <span class="ms-1" id="view-port-text">{{ state.port or "—" }}</span>
-              </p>
-
-              <p class="mb-1">
-                <span class="text-muted">Tracking:</span>
-                <span class="ms-1" id="tracking-label">
-                  {{ "On" if state.tracking else "Off" }}
-                </span>
-              </p>
-
-              <p class="mb-1 small text-muted mb-0">
-                Status:
-                <span id="status-text-inline">{{ state.status }}</span>
-              </p>
-
-              <!-- Public connect form -->
-              <form id="viewConnectForm" class="d-flex gap-2 mt-2">
-                <select name="port" class="form-select form-select-sm">
-                  {% for p in ports %}
-                    <option value="{{ p }}" {% if state.port == p %}selected{% endif %}>
-                      {{ p }}
-                    </option>
-                  {% endfor %}
-                </select>
-                <button type="submit" class="btn btn-outline-success btn-sm">
-                  Connect
-                </button>
-              </form>
-            </div>
-          </div>
-        </div>
 
         <!-- Azimuth dial -->
-        <div class="col-xl-3 col-lg-6">
+        <div class="col-xl-4 col-lg-6">
           <div class="glass-card h-100">
             <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
               <span class="fw-semibold">Azimuth Dial</span>
@@ -242,7 +294,7 @@
         </div>
 
         <!-- Elevation dial -->
-        <div class="col-xl-3 col-lg-6">
+        <div class="col-xl-4 col-lg-6">
           <div class="glass-card h-100">
             <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
               <span class="fw-semibold">Elevation Dial</span>
@@ -259,7 +311,7 @@
         </div>
 
         <!-- Camera -->
-        <div class="col-xl-3 col-lg-6">
+        <div class="col-xl-4 col-lg-12">
           <div class="glass-card h-100">
             <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
               <span class="fw-semibold">Antenna Camera</span>
@@ -286,9 +338,10 @@
             </div>
           </div>
         </div>
+
       </div>
 
-      <!-- Second row: coax positions + RF schematic in its own box -->
+      <!-- Second row: coax positions + RF schematic -->
       <div class="row g-3">
         <!-- Coax status + pills (read-only) -->
         <div class="col-xl-3 col-lg-6">
@@ -352,106 +405,105 @@
               <div class="coax-schematic-wrap">
                 <svg id="rf-schematic" viewBox="0 0 820 220">
 
-  <!-- TX and RX sources -->
-  <circle cx="70" cy="90" r="8" stroke="#aaa" stroke-width="1.5" fill="#222" />
-  <text x="70" y="75" text-anchor="middle">TX</text>
+                  <!-- TX and RX sources -->
+                  <circle cx="70" cy="90" r="8" stroke="#aaa" stroke-width="1.5" fill="#222" />
+                  <text x="70" y="75" text-anchor="middle">TX</text>
 
-  <circle cx="70" cy="130" r="8" stroke="#aaa" stroke-width="1.5" fill="#222" />
-  <text x="70" y="145" text-anchor="middle">RX</text>
+                  <circle cx="70" cy="130" r="8" stroke="#aaa" stroke-width="1.5" fill="#222" />
+                  <text x="70" y="145" text-anchor="middle">RX</text>
 
-  <!-- TX → PA input -->
-  <path id="w_tx_to_pa" class="wire" d="M78 90 H 100" />
+                  <!-- TX → PA input -->
+                  <path id="w_tx_to_pa" class="wire" d="M78 90 H 100" />
 
-  <!-- PA block (y = 90) -->
-  <g transform="translate(120,90)">
-    <rect class="amp-body" x="-20" y="-10" width="40" height="20" />
-    <text class="amp-label" x="0" y="4">PA</text>
-  </g>
+                  <!-- PA block (y = 90) -->
+                  <g transform="translate(120,90)">
+                    <rect class="amp-body" x="-20" y="-10" width="40" height="20" />
+                    <text class="amp-label" x="0" y="4">PA</text>
+                  </g>
 
-  <!-- PA → S1 P1 -->
-  <path id="w_pa_to_s1p1" class="wire" d="M140 90 H 170" />
+                  <!-- PA → S1 P1 -->
+                  <path id="w_pa_to_s1p1" class="wire" d="M140 90 H 170" />
 
-  <!-- RX → S1 P2 -->
-  <path id="w_rx_to_s1p2" class="wire" d="M78 130 H 170" />
+                  <!-- RX → S1 P2 -->
+                  <path id="w_rx_to_s1p2" class="wire" d="M78 130 H 170" />
 
-  <!-- Switch 1 (center = 120) -->
-  <g id="switch1" class="switch" data-state="p1" transform="translate(220,110)">
-    <circle class="switch-terminal" cx="-50" cy="-20" r="3" />
-    <circle class="switch-terminal" cx="-50" cy="20"  r="3" />
-    <circle class="switch-com"     cx="0"   cy="0"   r="3.5" />
+                  <!-- Switch 1 (center = 120) -->
+                  <g id="switch1" class="switch" data-state="p1" transform="translate(220,110)">
+                    <circle class="switch-terminal" cx="-50" cy="-20" r="3" />
+                    <circle class="switch-terminal" cx="-50" cy="20"  r="3" />
+                    <circle class="switch-com"     cx="0"   cy="0"   r="3.5" />
 
-    <line id="s1_blade" class="switch-handle" x1="0" y1="0" x2="-50" y2="-20" />
+                    <line id="s1_blade" class="switch-handle" x1="0" y1="0" x2="-50" y2="-20" />
 
-    <text class="switch-label" x="0" y="-40">S1</text>
-  </g>
+                    <text class="switch-label" x="0" y="-40">S1</text>
+                  </g>
 
-  <!-- S1 COM → S2 COM -->
-  <path id="w_s1com_to_s2com" class="wire" d="M224 110 H 415" />
+                  <!-- S1 COM → S2 COM -->
+                  <path id="w_s1com_to_s2com" class="wire" d="M224 110 H 415" />
 
-  <!-- Switch 2 (center = 110) -->
-  <g id="switch2" class="switch" data-state="p1" transform="translate(415,110)">
-    <circle class="switch-terminal" cx="50" cy="-20" r="3" />
-    <circle class="switch-terminal" cx="50" cy="20"  r="3" />
-    <circle class="switch-com"     cx="0"  cy="0"   r="3.5" />
+                  <!-- Switch 2 (center = 110) -->
+                  <g id="switch2" class="switch" data-state="p1" transform="translate(415,110)">
+                    <circle class="switch-terminal" cx="50" cy="-20" r="3" />
+                    <circle class="switch-terminal" cx="50" cy="20"  r="3" />
+                    <circle class="switch-com"     cx="0"  cy="0"   r="3.5" />
 
-    <line id="s2_blade" class="switch-handle" x1="0" y1="0" x2="50" y2="-20" />
+                    <line id="s2_blade" class="switch-handle" x1="0" y1="0" x2="50" y2="-20" />
 
-    <text class="switch-label" x="0" y="-40">S2</text>
-  </g>
+                    <text class="switch-label" x="0" y="-40">S2</text>
+                  </g>
 
-  <!-- S2 P1 → LNA -->
-  <path id="w_s2p1_to_lna" class="wire" d="M465 90 H 525" />
+                  <!-- S2 P1 → LNA -->
+                  <path id="w_s2p1_to_lna" class="wire" d="M465 90 H 525" />
 
-  <!-- LNA block -->
-  <g transform="translate(545,90)">
-    <rect class="amp-body" x="-20" y="-10" width="40" height="20" />
-    <text class="amp-label" x="0" y="4">LNA</text>
-  </g>
+                  <!-- LNA block -->
+                  <g transform="translate(545,90)">
+                    <rect class="amp-body" x="-20" y="-10" width="40" height="20" />
+                    <text class="amp-label" x="0" y="4">LNA</text>
+                  </g>
 
-  <!-- LNA → S3 P1 -->
-  <path id="w_lna_to_s3p1" class="wire" d="M565 90 H 625" />
+                  <!-- LNA → S3 P1 -->
+                  <path id="w_lna_to_s3p1" class="wire" d="M565 90 H 625" />
 
-  <!-- S2 P2 → S3 P2 -->
-  <path id="w_s2p2_to_s3p2" class="wire" d="M465 130 H 625" />
+                  <!-- S2 P2 → S3 P2 -->
+                  <path id="w_s2p2_to_s3p2" class="wire" d="M465 130 H 625" />
 
-  <!-- Switch 3 -->
-  <g id="switch3" class="switch" data-state="p1" transform="translate(675,110)">
-    <circle class="switch-terminal" cx="-50" cy="-20" r="3" />
-    <circle class="switch-terminal" cx="-50" cy="20"  r="3" />
-    <circle class="switch-com"     cx="0"   cy="0"   r="3.5" />
+                  <!-- Switch 3 -->
+                  <g id="switch3" class="switch" data-state="p1" transform="translate(675,110)">
+                    <circle class="switch-terminal" cx="-50" cy="-20" r="3" />
+                    <circle class="switch-terminal" cx="-50" cy="20"  r="3" />
+                    <circle class="switch-com"     cx="0"   cy="0"   r="3.5" />
 
-    <line id="s3_blade" class="switch-handle" x1="0" y1="0" x2="-50" y2="-20" />
+                    <line id="s3_blade" class="switch-handle" x1="0" y1="0" x2="-50" y2="-20" />
 
-    <text class="switch-label" x="0" y="-40">S3</text>
-  </g>
+                    <text class="switch-label" x="0" y="-40">S3</text>
+                  </g>
 
-  <!-- S3 → Antenna -->
-  <path id="w_s3com_to_out" class="wire" d="M679 110 H 750" />
+                  <!-- S3 → Antenna -->
+                  <path id="w_s3com_to_out" class="wire" d="M679 110 H 750" />
 
-  <!-- Antenna -->
-  <g id="antenna" transform="translate(750,110)">
-    <line x1="0" y1="0" x2="0" y2="-15" stroke="#ccc" stroke-width="2" />
-    <line x1="0" y1="-15" x2="-10" y2="-23" stroke="#ccc" stroke-width="2" />
-    <line x1="0" y1="-15" x2="10"  y2="-23" stroke="#ccc" stroke-width="2" />
-    <text x="0" y="-26" text-anchor="middle">ANT</text>
+                  <!-- Antenna -->
+                  <g id="antenna" transform="translate(750,110)">
+                    <line x1="0" y1="0" x2="0" y2="-15" stroke="#ccc" stroke-width="2" />
+                    <line x1="0" y1="-15" x2="-10" y2="-23" stroke="#ccc" stroke-width="2" />
+                    <line x1="0" y1="-15" x2="10"  y2="-23" stroke="#ccc" stroke-width="2" />
+                    <text x="0" y="-26" text-anchor="middle">ANT</text>
 
-    <!-- TX waves -->
-    <g id="ant_tx_group">
-      <path class="ant-wave ant-wave-tx" d="M6 -23 Q 20 -33 34 -28" />
-      <path class="ant-wave ant-wave-tx" d="M9 -28 Q 26 -40 43 -34" />
-      <path class="ant-wave ant-wave-tx" d="M12 -33 Q 32 -47 52 -40" />
-    </g>
+                    <!-- TX waves -->
+                    <g id="ant_tx_group">
+                      <path class="ant-wave ant-wave-tx" d="M6 -23 Q 20 -33 34 -28" />
+                      <path class="ant-wave ant-wave-tx" d="M9 -28 Q 26 -40 43 -34" />
+                      <path class="ant-wave ant-wave-tx" d="M12 -33 Q 32 -47 52 -40" />
+                    </g>
 
-    <!-- RX waves -->
-    <g id="ant_rx_group">
-      <path class="ant-wave ant-wave-rx" d="M12 -33 Q 32 -47 52 -40" />
-      <path class="ant-wave ant-wave-rx" d="M9 -28 Q 26 -40 43 -34" />
-      <path class="ant-wave ant-wave-rx" d="M6 -23 Q 20 -33 34 -28" />
-    </g>
-  </g>
+                    <!-- RX waves -->
+                    <g id="ant_rx_group">
+                      <path class="ant-wave ant-wave-rx" d="M12 -33 Q 32 -47 52 -40" />
+                      <path class="ant-wave ant-wave-rx" d="M9 -28 Q 26 -40 43 -34" />
+                      <path class="ant-wave ant-wave-rx" d="M6 -23 Q 20 -33 34 -28" />
+                    </g>
+                  </g>
 
-</svg>
-
+                </svg>
               </div>
 
               <small class="text-muted d-block mt-2">

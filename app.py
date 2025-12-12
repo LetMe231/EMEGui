@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+import random
 import webbrowser
 from datetime import datetime, UTC
 from functools import wraps
@@ -36,7 +37,7 @@ from serialComm import SerialAntenna
 from serialSwitch import SerialSwitch
 import CalcMoonPos
 
-
+measurements = []
 # -----------------------------------------------------------------------------
 # App / global objects
 # -----------------------------------------------------------------------------
@@ -46,7 +47,7 @@ app = Flask(__name__)
 load_dotenv()
 
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-change-me")
-APP_PASSWORD = os.getenv("APP_PASSWORD", "eme")
+APP_PASSWORD = os.getenv("APP_PASSWORD")
 
 
 CAMERA_SOURCE = os.getenv("CAMERA_SOURCE")
@@ -106,11 +107,33 @@ state: Dict[str, Any] = {
         "S2": 0,
         "S3": 0,
     },
+    "moon_next_above_15": None,
+    "moon_next_below_15": None,
 }
+
 
 ant: Optional[SerialAntenna] = None
 moon_cont_az: Optional[float] = None
 last_moon_az: Optional[float] = None
+
+
+def stop_tracking_worker() -> None:
+    """
+    Stop the background tracking thread (if running) and
+    mark state['tracking'] = False.
+    """
+    global tracking_thread, tracking_stop, ant
+
+    tracking_stop.set()
+
+    if tracking_thread and tracking_thread.is_alive():
+        try:
+            tracking_thread.join(timeout=1)
+        except Exception:
+            pass
+
+    tracking_thread = None
+    state["tracking"] = False
 
 
 # -----------------------------------------------------------------------------
@@ -413,15 +436,29 @@ def poll_loop() -> None:
         else:
             time.sleep(1)
 
-        # Always update Moon position
+        # Always update Moon position + projected crossing times
         try:
             azm, elm = CalcMoonPos.get_moon_position()
             state["az_moon"] = round(azm, 1)
             state["el_moon"] = round(elm, 1)
+
+            # Also compute when the Moon will next go above / below 15°
+            try:
+                next_up_iso, next_down_iso = CalcMoonPos.get_moon_threshold_times(
+                    min_el_deg=ELEVATION_MIN
+                )
+                state["moon_next_above_15"] = next_up_iso
+                state["moon_next_below_15"] = next_down_iso
+            except Exception:
+                state["moon_next_above_15"] = None
+                state["moon_next_below_15"] = None
+
         except Exception:
+            # If even Moon position fails, don't crash the loop
             pass
 
         time.sleep(1)
+
 
 
 # -----------------------------------------------------------------------------
@@ -824,12 +861,7 @@ def tracker():
         return jsonify(success=True, tracking=True, status=state["status"])
 
     # STOP tracking branch
-    tracking_stop.set()
-    try:
-        if tracking_thread:
-            tracking_thread.join(timeout=1)
-    except Exception:
-        pass
+    stop_tracking_worker()
 
     try:
         if ant:
@@ -840,6 +872,7 @@ def tracker():
 
     set_status("info", "Tracking and movement stopped")
     return jsonify(success=True, tracking=False, status=state["status"])
+
 
 # -----------------------------------------------------------------------------
 # Start a measurement
@@ -873,12 +906,123 @@ def measurement_start():
     # if not getattr(state, "locked", False):
     #     return jsonify(success=False, status="Cannot start measurement: Moon not locked"), 400
 
-    return jsonify(
-        success=True,
-        status="Measurement sequence would start now (logic not implemented yet)."
+ # --- TEMP: generate a fake measurement so charts have something to show ---
+    ts = datetime.now(UTC).isoformat()
+    fake_distance_km = 384_400 + random.uniform(-1000, 1000)   # around real Moon distance
+    fake_snr_db      = random.uniform(-20, 10)                 # random-ish SNR
+    success          = fake_snr_db > -10
+
+    measurements.append(
+        {
+            "timestamp": ts,
+            "distance_km": round(fake_distance_km, 1),
+            "snr_db": round(fake_snr_db, 1),
+            "success": success,
+        }
     )
 
+    # Optional: keep only the last N measurements
+    if len(measurements) > 200:
+        del measurements[:-200]
 
+    return jsonify(
+        success=True,
+        status="Measurement sequence would start now (dummy data added).",
+    )
+
+@app.route("/coax/toggle_mode", methods=["POST"])
+@require_auth
+@api_action
+def coax_toggle_mode():
+    """
+    Toggle all three coax relays between TX and RX presets.
+
+    TX preset: S1=1, S2=2, S3=2
+    RX preset: S1=2, S2=1, S3=1
+    """
+    global switch
+
+    # Same connectivity check as /coax/<sid>/<side>
+    if not (
+        switch
+        and getattr(switch, "ser", None)
+        and switch.ser.is_open
+        and state.get("switch_connected")
+    ):
+        set_status("error", "Pico switch not connected")
+        return jsonify(success=False, status=state["status"]), 500
+
+    switches = state.get("switches") or {}
+
+    # Determine current mode: try explicit state["coax_mode"] first,
+    # fall back to inferring from S1/S2/S3.
+    current_mode = state.get("coax_mode")
+    s1 = switches.get("S1")
+    s2 = switches.get("S2")
+    s3 = switches.get("S3")
+
+    if current_mode not in ("tx", "rx"):
+        if s1 == "1" and s2 == "2" and s3 == "2":
+            current_mode = "tx"
+        elif s1 == "2" and s2 == "1" and s3 == "1":
+            current_mode = "rx"
+        else:
+            # Unknown / mixed state → treat as RX so first toggle goes to TX
+            current_mode = "rx"
+
+    if current_mode == "tx":
+        new_mode = "rx"
+        target = {"S1": "2", "S2": "1", "S3": "1"}
+        label = "RX"
+    else:
+        new_mode = "tx"
+        target = {"S1": "1", "S2": "2", "S3": "2"}
+        label = "TX"
+
+    all_resp = {}
+    # Send all three commands under the same serial lock
+    with serial_lock:
+        for sid in (1, 2, 3):
+            side = target[f"S{sid}"]
+            resp = switch.set(sid, side)
+            if isinstance(resp, dict):
+                all_resp.update(resp)
+                sw = resp.get("switches")
+                if isinstance(sw, dict):
+                    switches.update(sw)
+
+    state["switches"] = switches
+    state["coax_mode"] = new_mode
+    set_status("ok", f"Coax relays set to {label} preset")
+
+    return jsonify(
+        success=True,
+        mode=new_mode,
+        switches=switches,
+        status=f"Coax relays set to {label} preset (S1={target['S1']}, S2={target['S2']}, S3={target['S3']})",
+    )
+
+@app.route("/data")
+def data_page():
+    """
+    Data / analysis page.
+
+    - Umlaufbahn (orbit-style) Moon plot
+    - EME measurement history (distance, SNR, etc.)
+    """
+    ports = [p.device for p in serial.tools.list_ports.comports()]
+    return render_template("data.html", state=state, ports=ports)
+
+
+@app.route("/api/measurements")
+def api_measurements():
+    """
+    Return measurement history for charts.
+    """
+    return jsonify(
+        measurements=measurements,
+        count=len(measurements),
+    )
 
 # -----------------------------------------------------------------------------
 # Stop / park
@@ -888,18 +1032,23 @@ def measurement_start():
 @require_auth
 @api_action
 def stop():
-    """Immediate stop of movement (no parking)."""
+    """
+    Immediate stop of movement AND stop tracking thread.
+    Does NOT park – it just freezes everything where it is.
+    """
     global ant
 
     if not ant:
         set_status("error", "Controller not connected!")
         return jsonify(success=False, status=state["status"]), 400
 
+    # First: stop tracking thread so it doesn't keep sending commands
+    stop_tracking_worker()
+
     try:
         with serial_lock:
             ant.stopMovement()
-        state["tracking"] = False
-        set_status("info", "Movement stopped")
+        set_status("info", "Movement & tracking stopped")
         return jsonify(success=True, status=state["status"])
     except Exception as exc:  # noqa: BLE001
         set_status("error", f"Error while stopping: {exc}")
@@ -1083,6 +1232,43 @@ def coax_connect():
         set_status("error", f"Failed to connect Pico switch on {port}: {exc}")
         return jsonify(success=False, status=state["status"]), 500
 
+@app.route("/coax/connect_public", methods=["POST"])
+@api_action
+def coax_connect_public():
+    """
+    Public connect for the Pico coax switch (no login).
+
+    Used by the data-only view page.
+    """
+    global switch
+
+    port = request.form.get("port")
+    if not port:
+        set_status("error", "No switch COM port selected")
+        return jsonify(success=False, status=state["status"]), 400
+
+    try:
+        # 1) HARD PROBE: must look like our Pico
+        switches_dict = probe_pico_port(port)
+
+        # 2) Now that we know it is our firmware, create the high-level wrapper
+        with serial_lock:
+            sw = SerialSwitch(port)
+        switch = sw
+
+        state["switch_port"] = port
+        state["switch_connected"] = True
+        state["switches"] = switches_dict
+
+        set_status("success", f"[view] Pico switch connected on {port}")
+        return jsonify(success=True, status=state["status"])
+
+    except Exception as exc:
+        switch = None
+        state["switch_port"] = None
+        state["switch_connected"] = False
+        set_status("error", f"[view] Failed to connect Pico switch on {port}: {exc}")
+        return jsonify(success=False, status=state["status"]), 500
 
 
 @app.route("/coax/disconnect", methods=["POST"])
@@ -1190,6 +1376,31 @@ def coax_status():
         switches=switches,
     ), 200
 
+# -----------------------------------------------------------------------------
+# Start background threads when the Flask app is used
+# -----------------------------------------------------------------------------
+
+
+_poll_started = False
+_poll_lock = threading.Lock()
+
+def start_background_threads() -> None:
+    """
+    Ensure the antenna / Moon poll loop is running,
+    even if the app is started via `flask run` or gunicorn.
+    """
+    global _poll_started
+    with _poll_lock:
+        if not _poll_started:
+            threading.Thread(target=poll_loop, daemon=True).start()
+            _poll_started = True
+
+
+@app.before_request
+def ensure_poll_loop_started():
+    # This will be called before every request, but the inner logic
+    # only starts the thread once thanks to _poll_started + _poll_lock
+    start_background_threads()
 
 
 # -----------------------------------------------------------------------------

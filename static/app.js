@@ -1,30 +1,26 @@
 // ==================== Drawing Helpers ====================
-function drawTicks(ctx, cx, cy, r, startAngle, endAngle, step, labelStep, color, outside=false, elevationMode=false) {
+function drawTicks(ctx, cx, cy, r, startAngle, endAngle, step, labelStep, color, outside = false, elevationMode = false) {
   ctx.strokeStyle = color;
   ctx.fillStyle = color;
   ctx.font = "11px Arial";
   ctx.textAlign = "center";
 
   for (let angle = startAngle; angle <= endAngle; angle += step) {
-    // Azimuth: 0° = up, clockwise
-    // Elevation: 0° = right, counter-clockwise to 90° at top
-    const rad = elevationMode 
-      ? (-angle) * Math.PI / 180 
-      : (angle - 90) * Math.PI / 180;
+    const rad = elevationMode
+      ? (-angle) * Math.PI / 180 // elevation: 0° = +x, 90° = +y
+      : (angle - 90) * Math.PI / 180; // azimuth: 0° = up
 
     const x1 = cx + r * Math.cos(rad);
     const y1 = cy + r * Math.sin(rad);
     const x2 = cx + (r - 10) * Math.cos(rad);
     const y2 = cy + (r - 10) * Math.sin(rad);
 
-    // tick mark
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // label skip 360° so 0° appears only once
     if (angle % labelStep === 0 && !(angle === endAngle && endAngle === 360)) {
       const offset = outside ? 15 : -25;
       const lx = cx + (r + offset) * Math.cos(rad);
@@ -34,31 +30,26 @@ function drawTicks(ctx, cx, cy, r, startAngle, endAngle, step, labelStep, color,
   }
 }
 
-
-
 function drawAzimuth(az, azMoon, connected) {
   const c = document.getElementById("azCanvas");
   if (!c) return;
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, c.width, c.height);
 
-  const r = 100;                              // define radius of azimuth circle
-  const cx = c.width / 2, cy = c.height / 2;  // define center of circle
+  const r = 100;
+  const cx = c.width / 2, cy = c.height / 2;
 
   const isDark = isDarkMode();
   const color = isDark ? "white" : "black";
 
-  // draw circle
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, 2 * Math.PI);
   ctx.lineWidth = 2;
   ctx.strokeStyle = color;
   ctx.stroke();
 
-  // add ticks + labels
   drawTicks(ctx, cx, cy, r, 0, 360, 30, 90, color, false, false);
 
-  // add title
   ctx.font = "bold 14px Arial";
   ctx.fillStyle = color;
   ctx.textAlign = "center";
@@ -84,7 +75,7 @@ function drawAzimuth(az, azMoon, connected) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // park position pointer
+    // park position at 40°
     let radPark = (40 - 90) * Math.PI / 180;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
@@ -95,7 +86,6 @@ function drawAzimuth(az, azMoon, connected) {
     ctx.stroke();
     ctx.setLineDash([]);
   } else {
-    // cross + "No Data!"
     ctx.strokeStyle = "red";
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -112,15 +102,13 @@ function drawAzimuth(az, azMoon, connected) {
 }
 
 function drawElevation(el, elMoon, connected) {
-  // get canvas
   const c = document.getElementById("elCanvas");
   if (!c) return;
   const ctx = c.getContext("2d");
   ctx.clearRect(0, 0, c.width, c.height);
 
-  // draw elevatuion quarter circle
-  const Rq = 200;                 // define radius
-  const cxCanvas = c.width / 2;   // calculate center of canvas
+  const Rq = 200;
+  const cxCanvas = c.width / 2;
   const cyCanvas = c.height / 2;
   const left = cxCanvas - 100;
   const top = cyCanvas - 100;
@@ -131,25 +119,21 @@ function drawElevation(el, elMoon, connected) {
   const isDark = isDarkMode();
   const color = isDark ? "white" : "black";
 
-  // draw quarter arc
   ctx.beginPath();
   ctx.arc(cx, cy, Rq, -Math.PI / 2, 0);
   ctx.lineWidth = 2;
   ctx.strokeStyle = color;
   ctx.stroke();
 
-  // draw ticks + labels
   drawTicks(ctx, cx, cy, Rq, 0, 90, 15, 30, color, true, true);
 
-  // set title
   ctx.font = "bold 14px Arial";
   ctx.fillStyle = color;
   ctx.textAlign = "center";
   ctx.fillText("Elevation", c.width / 2, top - 10);
 
   if (connected) {
-    // antenna pointer
-    let rad = el * Math.PI / 180; // 0° = +x, 90° = +y
+    let rad = el * Math.PI / 180;
     let ex = cx + Rq * Math.cos(rad);
     let ey = cy - Rq * Math.sin(rad);
     ctx.beginPath();
@@ -159,7 +143,6 @@ function drawElevation(el, elMoon, connected) {
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // moon pointer (dashed)
     let radMoon = elMoon * Math.PI / 180;
     let exm = cx + Rq * Math.cos(radMoon);
     let eym = cy - Rq * Math.sin(radMoon);
@@ -171,8 +154,7 @@ function drawElevation(el, elMoon, connected) {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // park position pointer
-    let radPark = (60) * Math.PI / 180;
+    let radPark = 60 * Math.PI / 180;
     let px = cx + Rq * Math.cos(radPark);
     let py = cy - Rq * Math.sin(radPark);
     ctx.beginPath();
@@ -184,7 +166,6 @@ function drawElevation(el, elMoon, connected) {
     ctx.stroke();
     ctx.setLineDash([]);
   } else {
-    // cross + "No Data!"
     ctx.strokeStyle = "red";
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -200,6 +181,129 @@ function drawElevation(el, elMoon, connected) {
     ctx.fillText("No Data!", c.width / 2, bottom + 30);
   }
 }
+// ==================== Moon Orbit (Umlaufbahn) ====================
+function drawMoonOrbit(azMoonDeg, elMoonDeg, antAzDeg, antElDeg) {
+  const c = document.getElementById("orbitCanvas");
+  if (!c) return;
+
+  const ctx = c.getContext("2d");
+  const w = c.width;
+  const h = c.height;
+  const cx = w / 2;
+  const cy = h / 2;
+  const R = Math.min(w, h) * 0.38; // orbit radius
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.4);
+  grd.addColorStop(0, "#020617");
+  grd.addColorStop(1, "#020617");
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, w, h);
+
+  // Orbit ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+  ctx.strokeStyle = "#4b5563";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 6]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Earth at center
+  ctx.beginPath();
+  ctx.arc(cx, cy, R * 0.2, 0, 2 * Math.PI);
+  const earthGrd = ctx.createRadialGradient(cx - 4, cy - 4, 0, cx, cy, R * 0.2);
+  earthGrd.addColorStop(0, "#38bdf8");
+  earthGrd.addColorStop(1, "#0f172a");
+  ctx.fillStyle = earthGrd;
+  ctx.fill();
+  ctx.strokeStyle = "#0ea5e9";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Cardinal directions
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "11px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText("N", cx, cy - R - 8);
+  ctx.fillText("S", cx, cy + R + 12);
+  ctx.fillText("W", cx - R - 10, cy + 4);
+  ctx.fillText("E", cx + R + 10, cy + 4);
+
+  // Helper: convert azimuth (0°=North, clockwise) to canvas angle
+  const toRad = (azDeg) => (azDeg - 90) * Math.PI / 180;
+
+  // Moon position on ring
+  const azMoon = isFinite(azMoonDeg) ? azMoonDeg : 0;
+  const moonA = toRad(azMoon);
+  const mx = cx + R * Math.cos(moonA);
+  const my = cy + R * Math.sin(moonA);
+
+  // Antenna direction as inner marker
+  const antAz = isFinite(antAzDeg) ? antAzDeg : azMoon;
+  const antA = toRad(antAz);
+  const ax = cx + (R * 0.75) * Math.cos(antA);
+  const ay = cy + (R * 0.75) * Math.sin(antA);
+
+  // Beam from Earth to antenna direction
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(ax, ay);
+  ctx.strokeStyle = "#22c55e";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Beam from Earth to Moon
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(mx, my);
+  ctx.strokeStyle = "#facc15";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Antenna marker
+  ctx.beginPath();
+  ctx.arc(ax, ay, 6, 0, 2 * Math.PI);
+  ctx.fillStyle = "#22c55e";
+  ctx.fill();
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Moon marker
+  ctx.beginPath();
+  ctx.arc(mx, my, 8, 0, 2 * Math.PI);
+  const moonGrd = ctx.createRadialGradient(mx - 2, my - 3, 0, mx, my, 8);
+  moonGrd.addColorStop(0, "#facc15");
+  moonGrd.addColorStop(1, "#854d0e");
+  ctx.fillStyle = moonGrd;
+  ctx.fill();
+  ctx.strokeStyle = "#fbbf24";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Tiny label near Moon
+  ctx.font = "10px system-ui";
+  ctx.fillStyle = "#e5e7eb";
+  ctx.textAlign = "left";
+  ctx.fillText("Moon", mx + 10, my - 4);
+
+  // Optionally show elevation as transparency of small arc
+  if (isFinite(elMoonDeg)) {
+    const elRatio = Math.max(0, Math.min(1, elMoonDeg / 90));
+    ctx.beginPath();
+    ctx.arc(mx, my, 12, 0, 2 * Math.PI);
+    ctx.strokeStyle = `rgba(250, 204, 21, ${0.15 + 0.35 * elRatio})`;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  }
+}
+
+
 
 // ==================== Status & AJAX ====================
 window.APP_CAN_EDIT = document.body.dataset.canEdit === "1";
@@ -210,7 +314,6 @@ function updateStatusBar(text, success, levelOverride) {
 
   statusBar.innerText = text || "";
 
-  // Decide visual level
   let level = levelOverride;
   const t = (text || "").toLowerCase();
 
@@ -230,7 +333,6 @@ function updateStatusBar(text, success, levelOverride) {
   statusBar.className = `statusbar statusbar--${level}`;
 }
 
-
 async function refreshStatus() {
   const isDark = isDarkMode();
   const normalText = isDark ? "white" : "black";
@@ -241,8 +343,8 @@ async function refreshStatus() {
     const data = await res.json();
 
     updateStatusBar(data.status, data.connected);
-    
-    // ----- Connection card UI -----
+
+    // ----- Control connection card -----
     const connDot        = document.getElementById("connection-dot");
     const connStatusText = document.getElementById("connection-status-text");
     const connPortText   = document.getElementById("connection-port-text");
@@ -250,89 +352,84 @@ async function refreshStatus() {
     const disconnectBtn  = document.getElementById("disconnectBtn");
     const portSelect     = document.querySelector("#connectForm select[name='port']");
 
-
-        // ----- View-only connection card (data view) -----
-    const viewConnDot   = document.getElementById("conn-dot");
-    const viewConnLabel = document.getElementById("conn-label");
-    const viewPortText  = document.getElementById("view-port-text");
-    const viewConnectBtn = document.querySelector("#viewConnectForm button[type='submit']");
-    const viewPortSelect = document.querySelector("#viewConnectForm select[name='port']");
-
-    if (viewConnDot) {
-      // Reuse the same 'offline' class; your CSS already supports connection-dot.offline
-      if (data.connected) {
-        viewConnDot.classList.remove("offline");
-      } else {
-        viewConnDot.classList.add("offline");
-      }
-    }
-
-    if (viewConnLabel) {
-      viewConnLabel.textContent = data.connected ? "Connected" : "Not connected";
-    }
-
-    if (viewPortText) {
-      viewPortText.textContent = data.port || "—";
-    }
-
-    if (viewConnectBtn) {
-      // Disable the button when already connected
-      viewConnectBtn.disabled = !!data.connected;
-    }
-
-    if (viewPortSelect && data.port) {
-      viewPortSelect.value = data.port;
-    }
-
-
-    // Dot: red/green
     if (connDot) {
-      if (data.connected) {
-        connDot.classList.remove("offline");
-      } else {
-        connDot.classList.add("offline");
-      }
+      connDot.classList.toggle("offline", !data.connected);
     }
-
-    // Status label in the card
     if (connStatusText) {
-      if (typeof data.connected === "boolean") {
-        connStatusText.textContent = data.connected ? "Connected" : "Disconnected";
-      } else {
-        connStatusText.textContent = data.status || "Idle";
-      }
+      connStatusText.textContent = data.connected ? "Connected" : "Disconnected";
     }
-
-    // Port text + dropdown selection, if backend exposes it
     if (connPortText) {
       connPortText.textContent = data.port || "—";
     }
     if (portSelect && data.port) {
       portSelect.value = data.port;
     }
-
-    // Enable / disable buttons based on connection state
     if (connectBtn) {
-      connectBtn.disabled = !!data.connected;        // disable when connected
+      connectBtn.disabled = !!data.connected;
     }
     if (disconnectBtn) {
-      disconnectBtn.disabled = !data.connected;      // disable when not connected
+      disconnectBtn.disabled = !data.connected;
     }
 
+    // ----- View-only connection card (data view) -----
+    const viewConnDot     = document.getElementById("conn-dot");
+    const viewConnLabel   = document.getElementById("conn-label");
+    const viewPortText    = document.getElementById("view-port-text");
+    const viewConnectBtn  = document.querySelector("#viewConnectForm button[type='submit']");
+    const viewPortSelect  = document.querySelector("#viewConnectForm select[name='port']");
+    const trackingLabel   = document.getElementById("tracking-label");
+    const statusInline    = document.getElementById("status-text-inline");
 
+    if (viewConnDot) {
+      viewConnDot.classList.toggle("offline", !data.connected);
+    }
+    if (viewConnLabel) {
+      viewConnLabel.textContent = data.connected ? "Connected" : "Not connected";
+    }
+    if (viewPortText) {
+      viewPortText.textContent = data.port || "—";
+    }
+    if (viewConnectBtn) {
+      viewConnectBtn.disabled = !!data.connected;
+    }
+    if (viewPortSelect && data.port) {
+      viewPortSelect.value = data.port;
+    }
+    if (trackingLabel && typeof data.tracking !== "undefined") {
+      trackingLabel.textContent = data.tracking ? "On" : "Off";
+    }
+    if (statusInline && typeof data.status === "string") {
+      statusInline.textContent = data.status;
+    }
 
-    // DOM refs
+    // ----- Pico coax connection UI (status from /status) -----
+    const coaxPortText       = document.getElementById("coax-port-text");
+    const coaxConnectBtn     = document.getElementById("coaxConnectBtn");
+    const coaxDisconnectBtn  = document.getElementById("coaxDisconnectBtn");
+
+    if (coaxPortText) {
+      coaxPortText.textContent = data.switch_port || "—";
+    }
+    if (coaxConnectBtn) {
+      coaxConnectBtn.disabled = !!data.switch_connected || !window.APP_CAN_EDIT;
+    }
+    if (coaxDisconnectBtn) {
+      coaxDisconnectBtn.disabled = !data.switch_connected || !window.APP_CAN_EDIT;
+    }
+
+    // ----- Text under dials -----
     const azText     = document.getElementById("azText");
     const azNormText = document.getElementById("azNormText");
     const azMoonText = document.getElementById("azMoonText");
     const elText     = document.getElementById("elText");
     const elMoonText = document.getElementById("elMoonText");
+    const moonAbove15El = document.getElementById("moonAbove15Text");
+    const moonBelow15El = document.getElementById("moonBelow15Text");
     const trackerBtn = document.getElementById("trackerBtn");
     const forceChk   = document.getElementById("forceElChk");
     const measBtn    = document.getElementById("measBtn");
+    const coaxModeBtn = document.getElementById("coaxModeBtn");
 
-
-    // Numbers under canvases
     if (azText) {
       azText.innerText = data.connected ? `Absolute angle: ${(+data.az).toFixed(1)}°` : "Absolute angle: --°";
       azText.style.color = normalText;
@@ -358,16 +455,48 @@ async function refreshStatus() {
       elMoonText.style.textShadow = isDark ? "0 0 8px yellow" : "";
     }
 
-    // Tracker button UX (disable if moon < 15° unless forced; also toggle label on active)
+    // Formatting helper for projected crossing times
+    const formatMoonTime = (iso) => {
+      if (!iso) return "--:--";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return "--:--";
+
+      const now = new Date();
+      const sameDay = d.toDateString() === now.toDateString();
+
+      const timeStr = d.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      if (sameDay) {
+        return timeStr;
+      }
+      const dateStr = d.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      });
+      return `${dateStr} ${timeStr}`;
+    };
+
+    if (moonAbove15El) {
+      moonAbove15El.textContent =
+        "Next ≥15°: " + formatMoonTime(data.moon_next_above_15);
+    }
+    if (moonBelow15El) {
+      moonBelow15El.textContent =
+        "Next <15°: " + formatMoonTime(data.moon_next_below_15);
+    }
+
+
+    // Tracker button
     if (trackerBtn) {
       const moonLow = (+data.el_moon) < 15;
       const forced  = forceChk && forceChk.checked;
       const canTrack = !!data.connected && (!moonLow || forced);
 
-      // trackerBtn.disabled = !canTrack;
       trackerBtn.title = !canTrack ? "Moon below 15° — tracking paused" : "";
 
-      // Reflect backend tracking state in button text/color
       if (data.tracking) {
         trackerBtn.innerText = "Tracker Stop";
         trackerBtn.classList.remove("btn-success");
@@ -379,12 +508,23 @@ async function refreshStatus() {
       }
     }
 
-    // Start measurement button: only when connected + tracking + (optionally) locked
+    // TX/RX toggle button
+    if (coaxModeBtn) {
+      const canToggle = !!data.connected && window.APP_CAN_EDIT;
+      coaxModeBtn.disabled = !canToggle;
+
+      if (!data.connected) {
+        coaxModeBtn.title = "Controller not connected";
+      } else if (!window.APP_CAN_EDIT) {
+        coaxModeBtn.title = "Read-only mode";
+      } else {
+        coaxModeBtn.title = "Toggle all relays between TX and RX presets";
+      }
+    }
+
+    // Measurement button: connected + tracking + (optionally) locked
     if (measBtn) {
       const trackingOn = !!data.tracking;
-
-      // If backend already provides a lock flag (e.g. data.locked),
-      // we require it; otherwise we treat it as "true" so you can test now.
       const hasLockInfo = typeof data.locked === "boolean";
       const moonLocked  = hasLockInfo ? !!data.locked : true;
 
@@ -407,24 +547,42 @@ async function refreshStatus() {
       }
     }
 
-
-    // Redraw dials (ensure numeric/boolean types)
     drawAzimuth(+data.az, +data.az_moon, !!data.connected);
     drawElevation(+data.el, +data.el_moon, !!data.connected);
+
+    // Orbit plot + numeric labels (only on data page where orbitCanvas exists)
+    const orbitCanvas = document.getElementById("orbitCanvas");
+    if (orbitCanvas) {
+      const azMoon = +data.az_moon;
+      const elMoon = +data.el_moon;
+      const antAz  = +data.az;
+      const antEl  = +data.el;
+
+      drawMoonOrbit(azMoon, elMoon, antAz, antEl);
+
+      const azLbl  = document.getElementById("orbit-az");
+      const elLbl  = document.getElementById("orbit-el");
+      const antAzLbl = document.getElementById("orbit-ant-az");
+      const antElLbl = document.getElementById("orbit-ant-el");
+
+      if (azLbl)    azLbl.textContent    = `${isFinite(azMoon) ? azMoon.toFixed(1) : "--.-"}°`;
+      if (elLbl)    elLbl.textContent    = `${isFinite(elMoon) ? elMoon.toFixed(1) : "--.-"}°`;
+      if (antAzLbl) antAzLbl.textContent = `${isFinite(antAz)  ? antAz.toFixed(1)  : "--.-"}°`;
+      if (antElLbl) antElLbl.textContent = `${isFinite(antEl)  ? antEl.toFixed(1)  : "--.-"}°`;
+    }
+
 
   } catch (e) {
     updateStatusBar(`Error: ${e}`, false);
   }
 }
+
 // ===== DARK MODE SYSTEM =====
 function isDarkMode() {
-  // We only support dark mode now
   return true;
 }
 
 function applyThemeLabels() {
-  // If you still use data-label-light/dark on anything, keep this;
-  // otherwise you can even remove this function entirely.
   const dark = true;
   document.querySelectorAll("[data-label-light]").forEach(el => {
     const txt = dark ? el.dataset.labelDark : el.dataset.labelLight;
@@ -437,19 +595,21 @@ function applyThemeLabels() {
 }
 
 function setTheme() {
-  // Always dark mode
   document.body.classList.add("dark-mode");
   applyThemeLabels();
   if (typeof refreshStatus === "function") refreshStatus();
 }
 
-// ===== INIT & EVENT WIRING (single block) =====
+// ==================== DOMContentLoaded MAIN ====================
 document.addEventListener("DOMContentLoaded", () => {
+  setTheme();
+  localStorage.setItem("darkMode", "dark");
+
+  // Camera fullscreen
   const camFsBtn = document.getElementById("camFsBtn");
   const camFsContainer = document.getElementById("camFsContainer");
   const camImg = document.getElementById("camStream");
 
-  // Start MJPEG stream only after the page has fully loaded
   if (camImg) {
     window.addEventListener("load", () => {
       if (!camImg.src) {
@@ -463,11 +623,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!document.fullscreenElement) {
         await (camFsContainer.requestFullscreen
           ? camFsContainer.requestFullscreen()
-          : camFsContainer.webkitRequestFullscreen()); // Safari
+          : camFsContainer.webkitRequestFullscreen?.());
       } else {
         await (document.exitFullscreen
           ? document.exitFullscreen()
-          : document.webkitExitFullscreen()); // Safari
+          : document.webkitExitFullscreen?.());
       }
     } catch (e) {
       updateStatusBar("Fullscreen error: " + e, false);
@@ -482,20 +642,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (camFsBtn && camFsContainer) {
     camFsBtn.addEventListener("click", toggleCamFullscreen);
-    // Double-click the video to toggle, too
     if (camImg) camImg.addEventListener("dblclick", toggleCamFullscreen);
 
-    // Keep label in sync when user presses ESC, etc.
     document.addEventListener("fullscreenchange", setFsButtonLabel);
     document.addEventListener("webkitfullscreenchange", setFsButtonLabel);
     setFsButtonLabel();
   }
 
-  // Dark mode toggle with forced darkmode at start
-  setTheme();
-  localStorage.setItem("darkMode", "dark");
-
-  // Connect
+  // MD-01 connect (control page)
   const connectForm = document.getElementById("connectForm");
   if (connectForm) {
     connectForm.addEventListener("submit", async (e) => {
@@ -508,23 +662,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Public connect on data view (no login)
-const viewConnectForm = document.getElementById("viewConnectForm");
-if (viewConnectForm) {
-  viewConnectForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const res = await fetch("/connect_public", { method: "POST", body: formData });
-    const data = await res.json();
-    // Status bar might not exist on view.html, but this is safe:
-    updateStatusBar(data.status, data.success);
-    // Refresh everywhere so labels / dials update
-    refreshStatus();
-  });
-}
+  // Public connect on view page
+  const viewConnectForm = document.getElementById("viewConnectForm");
+  if (viewConnectForm) {
+    viewConnectForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const res = await fetch("/connect_public", { method: "POST", body: formData });
+      const data = await res.json();
+      updateStatusBar(data.status, data.success);
+      refreshStatus();
+    });
+  }
 
-
-  // Disconnect
+  // MD-01 disconnect
   const disconnectBtn = document.getElementById("disconnectBtn");
   if (disconnectBtn) {
     disconnectBtn.addEventListener("click", async () => {
@@ -535,28 +686,25 @@ if (viewConnectForm) {
     });
   }
 
-    // Pico coax connect
+  // Pico coax connect/disconnect
   const coaxConnectForm = document.getElementById("coaxConnectForm");
-  const coaxConnectBtn  = document.getElementById("coaxConnectBtn");
   const coaxDisconnectBtn = document.getElementById("coaxDisconnectBtn");
 
   if (coaxConnectForm) {
     coaxConnectForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       if (!window.APP_CAN_EDIT) return;
-
       const formData = new FormData(e.target);
       try {
-        const res = await fetch("/coax/connect", {
-          method: "POST",
-          body: formData,
-        });
+        const res = await fetch("/coax/connect", { method: "POST", body: formData });
         const data = await res.json().catch(() => ({}));
-        updateStatusBar(data.status || (data.success ? "Pico connected" : "Pico connect failed"), data.success);
+        updateStatusBar(
+          data.status || (data.success ? "Pico connected" : "Pico connect failed"),
+          data.success
+        );
       } catch (err) {
         updateStatusBar("Pico connect error: " + err, false);
       }
-      // Refresh Pico + overall state
       refreshStatus();
       pollCoax();
     });
@@ -568,7 +716,10 @@ if (viewConnectForm) {
       try {
         const res = await fetch("/coax/disconnect", { method: "POST" });
         const data = await res.json().catch(() => ({}));
-        updateStatusBar(data.status || (data.success ? "Pico disconnected" : "Pico disconnect failed"), data.success);
+        updateStatusBar(
+          data.status || (data.success ? "Pico disconnected" : "Pico disconnect failed"),
+          data.success
+        );
       } catch (err) {
         updateStatusBar("Pico disconnect error: " + err, false);
       }
@@ -576,6 +727,39 @@ if (viewConnectForm) {
       pollCoax();
     });
   }
+
+  // Public Pico coax connect on data view
+const coaxViewConnectForm = document.getElementById("coaxViewConnectForm");
+if (coaxViewConnectForm) {
+  coaxViewConnectForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    try {
+      const res = await fetch("/coax/connect_public", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.success === false) {
+        const msg = data.status || data.error || "Pico connect failed";
+        updateStatusBar(msg, false);
+      } else {
+        updateStatusBar(
+          data.status || "Pico switch connected (view)",
+          true
+        );
+      }
+    } catch (err) {
+      updateStatusBar("Pico connect error (view): " + err, false);
+    }
+
+    // Refresh coax state + schematic
+    if (typeof pollCoax === "function") {
+      pollCoax();
+    }
+  });
+}
 
 
   // Set position
@@ -600,7 +784,6 @@ if (viewConnectForm) {
       const res = await fetch(`/tracker?force=${force}`, { method: "POST" });
       const data = await res.json();
       updateStatusBar(data.status, data.success);
-      // Button label/color mirror backend state
       if (data.tracking) {
         trackerBtn.innerText = "Tracker Stop";
         trackerBtn.classList.remove("btn-success");
@@ -660,35 +843,60 @@ if (viewConnectForm) {
     });
   }
 
+  // TX/RX path toggle
+  const coaxModeBtn = document.getElementById("coaxModeBtn");
+  if (coaxModeBtn) {
+    coaxModeBtn.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/coax/toggle_mode", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok || data.success === false) {
+          const msg = data.status || data.error || "TX/RX toggle failed";
+          updateStatusBar(msg, false);
+          return;
+        }
+
+        if (data.mode === "tx") {
+          coaxModeBtn.textContent = "Switch to RX";
+        } else if (data.mode === "rx") {
+          coaxModeBtn.textContent = "Switch to TX";
+        } else {
+          coaxModeBtn.textContent = "Toggle TX / RX";
+        }
+
+        updateStatusBar(
+          data.status || "RF path toggled (TX/RX)",
+          true
+        );
+
+        pollCoax();
+      } catch (e) {
+        updateStatusBar(`TX/RX toggle error: ${e}`, false);
+      }
+    });
+  }
+
   // First draw + periodic refresh
   refreshStatus();
   setInterval(refreshStatus, 2000);
 });
 
 // --- Camera health / overlay --------------------------------------------------
-document.addEventListener("DOMContentLoaded", () => {
+(() => {
   const img = document.getElementById("camStream");
   const overlay = document.getElementById("camOverlay");
-
   if (!img || !overlay) return;
+
+  let lastReload = 0;
 
   function showOverlay(on) {
     overlay.hidden = !on;
   }
 
   function startStream() {
-    img.src = img.dataset.src + "?ts=" + Date.now();
+    img.src = (img.dataset.src || "/video.mjpg") + "?ts=" + Date.now();
   }
-
-  img.addEventListener("error", () => {
-    showOverlay(true);
-    setTimeout(startStream, 1000);
-  });
-
-  img.addEventListener("load", () => showOverlay(false));
-
-  // Start immediately
-  startStream();
 
   img.addEventListener("error", () => {
     showOverlay(true);
@@ -721,49 +929,18 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     } catch {
       showOverlay(true);
+    } finally {
+      setTimeout(pollCam, 2000);
     }
-    setTimeout(pollCam, 2000);
   }
 
+  startStream();
   pollCam();
+})();
 
-  // --- Fullscreen toggle ---
-  if (fsBtn) {
-    async function toggleFs() {
-      try {
-        if (!document.fullscreenElement) {
-          await (fsContainer.requestFullscreen
-            ? fsContainer.requestFullscreen()
-            : fsContainer.webkitRequestFullscreen?.());
-        } else {
-          await (document.exitFullscreen
-            ? document.exitFullscreen()
-            : document.webkitExitFullscreen?.());
-        }
-      } catch (e) {
-        console.error("Fullscreen error:", e);
-      }
-    }
-    fsBtn.addEventListener("click", toggleFs);
-    if (img) img.addEventListener("dblclick", toggleFs);
-
-    function updateFsLabel() {
-      fsBtn.textContent = document.fullscreenElement ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
-    }
-    document.addEventListener("fullscreenchange", updateFsLabel);
-    document.addEventListener("webkitfullscreenchange", updateFsLabel);
-    updateFsLabel();
-  }
-
-});
-
-
-// Pico relais switches
+// ==================== Coax control & schematic ====================
 async function setCoax(sid, side) {
-  // If UI is read-only, ignore clicks entirely
-  if (!window.APP_CAN_EDIT) {
-    return;
-  }
+  if (!window.APP_CAN_EDIT) return;
 
   try {
     const r = await fetch(`/coax/${sid}/${side}`, { method: "POST" });
@@ -776,7 +953,6 @@ async function setCoax(sid, side) {
     }
 
     updateStatusBar(j.status || `Coax S${sid} → ${side}`, true);
-    // Re-poll to update button highlight
     pollCoax();
   } catch (e) {
     updateStatusBar(`Coax error: ${e}`, false);
@@ -784,7 +960,6 @@ async function setCoax(sid, side) {
 }
 
 function updateCoaxButtonsFromState(switches, connected) {
-  // Reset / disable everything first
   for (let sid = 1; sid <= 3; sid++) {
     ["1", "2"].forEach((side) => {
       const btn = document.getElementById(`coax-${sid}-${side}`);
@@ -796,7 +971,6 @@ function updateCoaxButtonsFromState(switches, connected) {
 
   if (!connected || !switches) return;
 
-  // switches is e.g. { "S1": "1", "S2": "2", "S3": "1" }
   Object.entries(switches).forEach(([key, val]) => {
     if (!val) return;
     const sid = key.replace("S", "");
@@ -805,123 +979,7 @@ function updateCoaxButtonsFromState(switches, connected) {
   });
 }
 
-    // ----- Pico coax connection UI (COM + buttons) -----
-    const coaxPortText       = document.getElementById("coax-port-text");
-    const coaxConnectBtn     = document.getElementById("coaxConnectBtn");
-    const coaxDisconnectBtn  = document.getElementById("coaxDisconnectBtn");
-
-    if (coaxPortText) {
-      coaxPortText.textContent = data.switch_port || "—";
-    }
-
-    if (coaxConnectBtn) {
-      // Disable connect when already connected, or in view-only mode
-      coaxConnectBtn.disabled = !!data.switch_connected || !window.APP_CAN_EDIT;
-    }
-
-    if (coaxDisconnectBtn) {
-      // Disable disconnect when not connected, or in view-only mode
-      coaxDisconnectBtn.disabled = !data.switch_connected || !window.APP_CAN_EDIT;
-    }
-
-async function pollCoax() {
-  try {
-    const r = await fetch("/coax/status", { cache: "no-store" });
-    const j = await r.json();
-
-    const connected = !!j.connected;
-    const switches = j.switches || {};
-
-    // -------- Main status line inside card body --------
-    const statusEl = document.getElementById("coax-status");
-    if (statusEl) {
-      if (connected) {
-        statusEl.textContent = "Pico switch: online";
-        statusEl.classList.remove("text-danger");
-        statusEl.classList.add("text-success");
-      } else {
-        statusEl.textContent = "Pico switch: offline";
-        statusEl.classList.remove("text-success");
-        statusEl.classList.add("text-danger");
-      }
-    }
-
-    // -------- Header indicator ("Coax Switches ● Online/Offline") --------
-    const connDot  = document.getElementById("coax-conn-dot");
-    const connText = document.getElementById("coax-conn-text");
-    if (connDot) {
-      if (connected) {
-        connDot.classList.add("online");
-      } else {
-        connDot.classList.remove("online");
-      }
-    }
-    if (connText) {
-      connText.textContent = connected ? "Online" : "Offline";
-    }
-
-    // -------- Control-page buttons (if present) --------
-    updateCoaxButtonsFromState(switches, connected);
-
-    // -------- Read-only pills (view page) --------
-    ["1", "2", "3"].forEach((sid) => {
-      const current = switches["S" + sid];
-
-      ["1", "2"].forEach((side) => {
-        const pill = document.getElementById(`coax-view-${sid}-${side}`);
-        if (!pill) return;
-
-        // Clear previous state
-        pill.classList.remove("coax-pill--active-1", "coax-pill--active-2");
-
-        // Highlight only when connected and this is the active side
-        if (connected && current === side) {
-          pill.classList.add(
-            side === "1" ? "coax-pill--active-1" : "coax-pill--active-2"
-          );
-        }
-      });
-    });
-
-    // -------- RF schematic (control + view, if present) --------
-    updateCoaxSchematic(switches, connected);
-
-  } catch (e) {
-    const statusEl = document.getElementById("coax-status");
-    if (statusEl) {
-      statusEl.textContent = "Pico switch: offline";
-      statusEl.classList.remove("text-success");
-      statusEl.classList.add("text-danger");
-    }
-
-    const connDot  = document.getElementById("coax-conn-dot");
-    const connText = document.getElementById("coax-conn-text");
-    if (connDot) connDot.classList.remove("online");
-    if (connText) connText.textContent = "Offline";
-
-    // Clear pills
-    ["1", "2", "3"].forEach((sid) => {
-      ["1", "2"].forEach((side) => {
-        const pill = document.getElementById(`coax-view-${sid}-${side}`);
-        if (pill) {
-          pill.classList.remove("coax-pill--active-1", "coax-pill--active-2");
-        }
-      });
-    });
-
-    updateCoaxButtonsFromState({}, false);
-    updateCoaxSchematic({}, false);
-  }
-}
-
-// keep polling
-setInterval(pollCoax, 2000);
-pollCoax();
-
-
-// ---------- RF schematic helpers (S1/S2/S3 from Pico) -------------------
-
-// Your original orientation helper: p1/p2 + left/right
+// --- RF schematic helpers (S1/S2/S3 from Pico) ---
 function setBladePosition(blade, orientation) {
   if (!blade) return;
   let x2, y2;
@@ -940,7 +998,6 @@ function setBladePosition(blade, orientation) {
   blade.setAttribute("y2", String(y2));
 }
 
-// Convenience: layout = "left" | "right", state = "p1" | "p2"
 function setRfBlade(blade, layout, state) {
   if (!blade) return;
   const orientation =
@@ -950,30 +1007,21 @@ function setRfBlade(blade, layout, state) {
   setBladePosition(blade, orientation);
 }
 
-// Set a single wire's visual state: off / ok (green) / error (red)
 function setWireState(id, state) {
   const wire = document.getElementById(id);
   if (!wire) return;
   wire.classList.remove("active", "error");
-
-  if (state === "ok") {
-    wire.classList.add("active");
-  } else if (state === "error") {
-    wire.classList.add("error");
-  }
+  if (state === "ok") wire.classList.add("active");
+  if (state === "error") wire.classList.add("error");
 }
 
-// Turn TX / RX RF waves on/off
 function setRfWaves(txOn, rxOn) {
   const tx = document.querySelectorAll("#rf-schematic .ant-wave-tx");
   const rx = document.querySelectorAll("#rf-schematic .ant-wave-rx");
-
   tx.forEach((w) => w.classList.toggle("active", !!txOn));
   rx.forEach((w) => w.classList.toggle("active", !!rxOn));
 }
 
-// Highlight the RF path and decide if it's valid TX / RX
-// s1State/s2State/s3State are "p1"/"p2"; connected is boolean
 function highlightRfPath(s1State, s2State, s3State, connected) {
   const wireIds = {
     tx_to_pa:       "w_tx_to_pa",
@@ -996,8 +1044,8 @@ function highlightRfPath(s1State, s2State, s3State, connected) {
     return;
   }
 
-  const sourceIsTx = s1State === "p1"; // S1=1 → TX
-  const sourceIsRx = s1State === "p2"; // S1=2 → RX
+  const sourceIsTx = s1State === "p1";
+  const sourceIsRx = s1State === "p2";
 
   const path = {
     tx_to_pa:       false,
@@ -1012,9 +1060,7 @@ function highlightRfPath(s1State, s2State, s3State, connected) {
 
   setRfWaves(false, false);
 
-  // --- S1: choose source (TX or RX) -------------------------------------
   let sourceFeedsS1Com = false;
-
   if (sourceIsTx) {
     path.tx_to_pa   = true;
     path.pa_to_s1p1 = true;
@@ -1029,10 +1075,8 @@ function highlightRfPath(s1State, s2State, s3State, connected) {
     return;
   }
 
-  // --- S1 COM to S2 ------------------------------------------------------
   path.s1com_to_s2com = true;
 
-  // --- S2: upper path (LNA) or lower bypass ------------------------------
   let s2FeedsS3P1 = false;
   let s2FeedsS3P2 = false;
 
@@ -1045,9 +1089,7 @@ function highlightRfPath(s1State, s2State, s3State, connected) {
     s2FeedsS3P2 = true;
   }
 
-  // --- S3: decide if we reach the antenna -------------------------------
   let s3HasValidPathToOut = false;
-
   if (s3State === "p1" && s2FeedsS3P1) {
     path.s3com_to_out = true;
     s3HasValidPathToOut = true;
@@ -1057,15 +1099,12 @@ function highlightRfPath(s1State, s2State, s3State, connected) {
     s3HasValidPathToOut = true;
   }
 
-  // --- Valid combos (from your original logic) --------------------------
-  // Valid TX: S1=1 (p1), S2=2 (p2), S3=2 (p2)
   const txConfigCorrect =
     sourceIsTx &&
     s1State === "p1" &&
     s2State === "p2" &&
     s3State === "p2";
 
-  // Valid RX: S1=2 (p2), S2=1 (p1), S3=1 (p1)
   const rxConfigCorrect =
     sourceIsRx &&
     s1State === "p2" &&
@@ -1075,23 +1114,18 @@ function highlightRfPath(s1State, s2State, s3State, connected) {
   const pathToAntennaIsCorrect =
     s3HasValidPathToOut && (txConfigCorrect || rxConfigCorrect);
 
-  // --- Apply wire states -------------------------------------------------
   Object.entries(wireIds).forEach(([key, id]) => {
     if (!path[key]) {
       setWireState(id, "off");
       return;
     }
-
     if (s3HasValidPathToOut && !pathToAntennaIsCorrect) {
-      // We are feeding the antenna, but NOT in one of the allowed configs
       setWireState(id, "error");
     } else {
-      // Normal active (green)
       setWireState(id, "ok");
     }
   });
 
-  // --- RF waves at antenna ----------------------------------------------
   if (pathToAntennaIsCorrect) {
     setRfWaves(sourceIsTx, sourceIsRx);
   } else {
@@ -1099,12 +1133,10 @@ function highlightRfPath(s1State, s2State, s3State, connected) {
   }
 }
 
-// Use Pico switch states to drive blades + path
 function updateCoaxSchematic(switches, connected) {
   const svg = document.getElementById("rf-schematic");
   if (!svg) return;
 
-  // switches is e.g. { S1: "1", S2: "2", S3: "1" }
   const getVal = (sid) => {
     if (!switches) return null;
     const v = switches["S" + sid];
@@ -1115,7 +1147,6 @@ function updateCoaxSchematic(switches, connected) {
   const s2Val = getVal(2);
   const s3Val = getVal(3);
 
-  // Map Pico "1"/"2" to "p1"/"p2"
   const mapToState = (v) => (v === "2" || v === 2 ? "p2" : "p1");
 
   const s1State = s1Val ? mapToState(s1Val) : "p1";
@@ -1127,23 +1158,219 @@ function updateCoaxSchematic(switches, connected) {
   const s3Blade = document.getElementById("s3_blade");
 
   if (connected) {
-    // Match your SVG geometry:
-    // S1: ports LEFT, S2: ports RIGHT, S3: ports LEFT
     setRfBlade(s1Blade, "left",  s1State);
     setRfBlade(s2Blade, "right", s2State);
     setRfBlade(s3Blade, "left",  s3State);
   } else {
-    // Park everything to p1 (TX path) when offline
     setRfBlade(s1Blade, "left",  "p1");
     setRfBlade(s2Blade, "right", "p1");
     setRfBlade(s3Blade, "left",  "p1");
   }
 
-  // Highlight / animate RF path
   highlightRfPath(
     connected ? s1State : null,
     connected ? s2State : null,
     connected ? s3State : null,
     connected
   );
+}
+
+async function pollCoax() {
+  try {
+    const r = await fetch("/coax/status", { cache: "no-store" });
+    const j = await r.json();
+
+    const connected = !!j.connected;
+    const switches = j.switches || {};
+
+    const statusEl = document.getElementById("coax-status");
+    if (statusEl) {
+      if (connected) {
+        statusEl.textContent = "Pico switch: online";
+        statusEl.classList.remove("text-danger");
+        statusEl.classList.add("text-success");
+      } else {
+        statusEl.textContent = "Pico switch: offline";
+        statusEl.classList.remove("text-success");
+        statusEl.classList.add("text-danger");
+      }
+    }
+
+    const connDot  = document.getElementById("coax-conn-dot");
+    const connText = document.getElementById("coax-conn-text");
+    if (connDot) {
+      connDot.classList.toggle("online", connected);
+    }
+    if (connText) {
+      connText.textContent = connected ? "Online" : "Offline";
+    }
+
+    updateCoaxButtonsFromState(switches, connected);
+
+    ["1", "2", "3"].forEach((sid) => {
+      const current = switches["S" + sid];
+      ["1", "2"].forEach((side) => {
+        const pill = document.getElementById(`coax-view-${sid}-${side}`);
+        if (!pill) return;
+        pill.classList.remove("coax-pill--active-1", "coax-pill--active-2");
+        if (connected && current === side) {
+          pill.classList.add(
+            side === "1" ? "coax-pill--active-1" : "coax-pill--active-2"
+          );
+        }
+      });
+    });
+
+    updateCoaxSchematic(switches, connected);
+
+  } catch (e) {
+    const statusEl = document.getElementById("coax-status");
+    if (statusEl) {
+      statusEl.textContent = "Pico switch: offline";
+      statusEl.classList.remove("text-success");
+      statusEl.classList.add("text-danger");
+    }
+
+    const connDot  = document.getElementById("coax-conn-dot");
+    const connText = document.getElementById("coax-conn-text");
+    if (connDot) connDot.classList.remove("online");
+    if (connText) connText.textContent = "Offline";
+
+    ["1", "2", "3"].forEach((sid) => {
+      ["1", "2"].forEach((side) => {
+        const pill = document.getElementById(`coax-view-${sid}-${side}`);
+        if (pill) {
+          pill.classList.remove("coax-pill--active-1", "coax-pill--active-2");
+        }
+      });
+    });
+
+    updateCoaxButtonsFromState({}, false);
+    updateCoaxSchematic({}, false);
+  }
+}
+
+setInterval(pollCoax, 2000);
+pollCoax();
+
+// ==================== Data page: charts ====================
+
+let distChart = null;
+let snrChart = null;
+
+function buildCharts(ctxDist, ctxSnr) {
+  distChart = new Chart(ctxDist, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "Earth–Moon distance [km]",
+          data: [],
+          borderWidth: 2,
+          tension: 0.25,
+          pointRadius: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: "#e5e7eb" } },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#9ca3af", maxRotation: 45, minRotation: 0 },
+          grid: { display: false },
+        },
+        y: {
+          ticks: { color: "#9ca3af" },
+          grid: { color: "rgba(55,65,81,0.4)" },
+        },
+      },
+    },
+  });
+
+  snrChart = new Chart(ctxSnr, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "SNR [dB]",
+          data: [],
+          borderWidth: 2,
+          tension: 0.25,
+          pointRadius: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: "#e5e7eb" } },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#9ca3af", maxRotation: 45, minRotation: 0 },
+          grid: { display: false },
+        },
+        y: {
+          ticks: { color: "#9ca3af" },
+          grid: { color: "rgba(55,65,81,0.4)" },
+        },
+      },
+    },
+  });
+}
+
+async function refreshMeasurements() {
+  const distCanvas = document.getElementById("distChart");
+  const snrCanvas  = document.getElementById("snrChart");
+  if (!distCanvas || !snrCanvas) return; // not on data page
+
+  if (!distChart || !snrChart) {
+    const ctxDist = distCanvas.getContext("2d");
+    const ctxSnr  = snrCanvas.getContext("2d");
+    buildCharts(ctxDist, ctxSnr);
+  }
+
+  try {
+    const res = await fetch("/api/measurements", { cache: "no-store" });
+    const data = await res.json();
+    const meas = data.measurements || [];
+
+    // Sort by timestamp ascending
+    meas.sort((a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""));
+
+    const labels = meas.map((m) =>
+      (m.timestamp || "").replace("T", " ").slice(0, 19)
+    );
+    const dist = meas.map((m) => m.distance_km);
+    const snr  = meas.map((m) => m.snr_db);
+
+    distChart.data.labels = labels;
+    distChart.data.datasets[0].data = dist;
+    distChart.update("none");
+
+    snrChart.data.labels = labels;
+    snrChart.data.datasets[0].data = snr;
+    snrChart.update("none");
+  } catch (e) {
+    // soft fail – nothing critical
+    console.warn("Error fetching measurements:", e);
+  }
+}
+
+// Called from data.html after DOM is ready
+function initDataPage() {
+  // reuse global /status polling for orbit/labels
+  refreshStatus();
+  setInterval(refreshStatus, 2000);
+
+  // and separately poll measurement history
+  refreshMeasurements();
+  setInterval(refreshMeasurements, 5000);
 }

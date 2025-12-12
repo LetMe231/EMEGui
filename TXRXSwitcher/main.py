@@ -5,8 +5,8 @@ import time
 # -----------------------------
 #  GPIO CONFIG
 # -----------------------------
-S1_1 = Pin(21, Pin.OUT)
-S1_2 = Pin(20, Pin.OUT)
+S1_1 = Pin(20, Pin.OUT)
+S1_2 = Pin(21, Pin.OUT)
 S2_1 = Pin(19, Pin.OUT)
 S2_2 = Pin(18, Pin.OUT)
 S3_1 = Pin(17, Pin.OUT)
@@ -37,7 +37,7 @@ for c in coils.values():
     c.value(COIL_OFF)
 
 def pulse(coil_pin):
-    # short active-LOW pulse
+    print("DEBUG pulsing GPIO", coil_pin)
     coil_pin.value(COIL_ON)
     time.sleep_ms(50)
     coil_pin.value(COIL_OFF)
@@ -48,7 +48,7 @@ def set_switch(sid, side):
     pin_name = f"{sid}_{side}"
     if pin_name not in coils:
         return "ERROR"
-
+    print("DEBUG set_switch:", sid, side, "pin:", pin_name)
     # Safety: make sure opposite coil is OFF
     if side == "1":
         coils[f"{sid}_2"].value(COIL_OFF)

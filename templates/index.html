@@ -19,47 +19,7 @@
 <body class="app-body text-center" data-can-edit="{{ '1' if can_edit else '0' }}">
 
   <div class="app-shell container-fluid py-3">
-
-    <!-- Header -->
-    <header class="mb-3">
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div class="d-flex align-items-center gap-2">
-          <div class="brand-icon">
-            <span>📡</span>
-          </div>
-          <div class="text-start">
-            <h1 class="h4 mb-0 fw-bold">MD-01 Controller</h1>
-            <small class="text-muted d-block">Moon tracking &amp; antenna control</small>
-          </div>
-        </div>
-
-        <div class="d-flex align-items-center gap-2">
-          <form method="post" action="/login" class="d-flex align-items-center gap-2">
-            {% if can_edit %}
-              <span class="badge bg-success-subtle text-success-emphasis">Control enabled</span>
-              <button
-                type="submit"
-                formaction="/logout"
-                class="btn btn-outline-danger btn-sm"
-              >
-                Logout
-              </button>
-            {% else %}
-              <input
-                type="password"
-                name="password"
-                class="form-control form-control-sm"
-                placeholder="Control password"
-                autocomplete="current-password"
-              >
-              <button type="submit" class="btn btn-outline-success btn-sm">
-                Login
-              </button>
-            {% endif %}
-          </form>
-        </div>
-      </div>
-    </header>
+    {% include "navbar.html" %}
 
     <!-- Connection & Movement Row -->
     <section class="mb-3">
@@ -231,22 +191,35 @@
           </div>
         </div>
 
-        <!-- Elevation -->
-        <div class="col-xl-3 col-lg-6">
-          <div class="glass-card h-100">
-            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
-              <span class="fw-semibold">Elevation Dial</span>
-              <span class="badge bg-dark-subtle text-light-emphasis small">0–90°</span>
-            </div>
-            <div class="card-body">
-              <canvas id="elCanvas" width="280" height="260" class="rounded"></canvas>
-              <div class="mt-3 dial-texts">
-                <p id="elText" class="status-text mb-1">Antenna elevation: --°</p>
-                <p id="elMoonText" class="moon-text mb-0">Moon angle: --°</p>
-              </div>
+       <!-- Elevation dial (CONTROL PAGE) -->
+      <div class="col-xl-3 col-lg-6">
+        <div class="glass-card h-100">
+          <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">Elevation Dial</span>
+            <span class="badge bg-dark-subtle text-light-emphasis small">0–90°</span>
+          </div>
+          <div class="card-body">
+            <!-- Canvas for JS drawing -->
+            <canvas id="elCanvas" width="280" height="260" class="rounded"></canvas>
+
+            <div class="mt-3 dial-texts">
+              <p id="elText" class="status-text mb-1">
+                Antenna elevation: --°
+              </p>
+              <p id="elMoonText" class="moon-text mb-1">
+                Moon angle: --°
+              </p>
+              <p id="moonAbove15Text" class="small text-muted mb-1">
+                Next ≥15°: --:--
+              </p>
+              <p id="moonBelow15Text" class="small text-muted mb-0">
+                Next &lt;15°: --:--
+              </p>
             </div>
           </div>
         </div>
+      </div>
+
 
         <!-- Camera -->
         <div class="col-xl-3 col-lg-6">
@@ -459,39 +432,50 @@
 
       </div>
 
-      <!-- NEW ROW: Moon distance measurement card -->
-      <div class="row g-3 mt-2">
-        <div class="col-xl-6 col-lg-8">
-          <div class="glass-card h-100">
-            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
-              <span class="fw-semibold">Moon Distance Measurement</span>
-              <span class="badge bg-secondary-subtle text-secondary-emphasis small">
-                Requires tracking &amp; lock
-              </span>
+    <!-- NEW ROW: Moon distance measurement & RF mode card -->
+    <div class="row g-3 mt-2">
+      <div class="col-xl-6 col-lg-8">
+        <div class="glass-card h-100">
+          <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">Moon Distance Measurement</span>
+            <span class="badge bg-secondary-subtle text-secondary-emphasis small">
+              Requires tracking &amp; lock
+            </span>
+          </div>
+          <div class="card-body d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+            <div class="text-start">
+              <p class="mb-1 small text-muted">
+                Controls the RF path and starts a transmit/receive sequence to measure the distance to the Moon.
+              </p>
+              <p class="mb-0 small text-muted">
+                TX/RX toggle switches all three coax relays between TX and RX presets.<br>
+                Measurement is only enabled when the rotor is connected, tracking, and locked on the Moon.
+              </p>
             </div>
-            <div class="card-body d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
-              <div class="text-start">
-                <p class="mb-1 small text-muted">
-                  Starts a transmit/receive sequence to measure the distance to the Moon.
-                </p>
-                <p class="mb-0 small text-muted">
-                  Enabled only when the rotor is connected, tracking, and locked on the Moon.
-                </p>
-              </div>
-              <div class="text-end">
-                <button
-                  id="measBtn"
-                  type="button"
-                  class="btn btn-outline-light btn-sm"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  Start measurement
-                </button>
-              </div>
+            <div class="text-end d-flex flex-column gap-2 align-items-end">
+              <button
+                id="coaxModeBtn"
+                type="button"
+                class="btn btn-outline-warning btn-sm"
+                {% if not can_edit %}disabled{% endif %}
+              >
+                Toggle TX / RX
+              </button>
+
+              <button
+                id="measBtn"
+                type="button"
+                class="btn btn-outline-light btn-sm"
+                {% if not can_edit %}disabled{% endif %}
+              >
+                Start measurement
+              </button>
             </div>
           </div>
         </div>
       </div>
+    </div>
+
 
     </section>
 

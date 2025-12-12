@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MD-01 - Data & EME Analysis</title>
+
+  <!-- Bootstrap -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+  >
+
+  <!-- Custom styles -->
+  <link href="/static/style.css" rel="stylesheet">
+
+  <!-- Chart.js for plots -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Page-specific styles -->
+  <style>
+    /* Orbit canvas styling */
+    #orbitCanvas {
+      width: 100%;
+      max-width: 360px;
+      aspect-ratio: 1 / 1;
+      background: radial-gradient(circle at center, #0f172a 0, #020617 70%);
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.5);
+    }
+
+    .orbit-label {
+      font-size: 0.8rem;
+      color: #9ca3af;
+    }
+
+    .metric-pill {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 0.35rem;
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      font-size: 0.8rem;
+    }
+
+    .metric-pill span.value {
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+
+    .metric-pill span.label {
+      color: #9ca3af;
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+
+<body class="app-body text-center dark-mode">
+  <div class="app-shell container-fluid py-3">
+    {% include "navbar.html" %}
+    <!-- Top bar -->
+    <header class="d-flex justify-content-between align-items-center mb-3">
+      <div class="d-flex align-items-center gap-3 text-start">
+        <div class="logo-pill">
+          <span class="logo-dot"></span>
+          <span class="logo-text">EME</span>
+        </div>
+        <div class="text-start">
+          <h1 class="h4 mb-0 fw-bold">MD-01 Data</h1>
+          <small class="text-muted d-block">Moon orbit &amp; EME measurements</small>
+        </div>
+      </div>
+
+      <div class="d-flex align-items-center gap-2">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary btn-sm">
+          Live dashboard
+        </a>
+        <a href="{{ url_for('control') }}" class="btn btn-outline-success btn-sm">
+          Control login
+        </a>
+      </div>
+    </header>
+
+    <!-- Main content -->
+    <section class="mt-3">
+      <div class="row g-3">
+        <!-- Left: Moon orbit + current geometry -->
+        <div class="col-xl-4 col-lg-5">
+          <div class="glass-card h-100">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">Moon Umlaufbahn</span>
+              <span class="badge bg-dark-subtle text-light-emphasis small">
+                top view · local az
+              </span>
+            </div>
+            <div class="card-body">
+              <div class="d-flex flex-column align-items-center">
+                <canvas id="orbitCanvas" width="360" height="360"></canvas>
+                <p class="orbit-label mt-3 mb-2">
+                  Earth at center · Moon on orbital ring · angle from your local north (azimuth)
+                </p>
+                <div class="d-flex flex-wrap justify-content-center gap-2">
+                  <span class="metric-pill">
+                    <span class="label">Moon Az</span>
+                    <span class="value" id="orbit-az">--.-°</span>
+                  </span>
+                  <span class="metric-pill">
+                    <span class="label">Moon El</span>
+                    <span class="value" id="orbit-el">--.-°</span>
+                  </span>
+                  <span class="metric-pill">
+                    <span class="label">Your Az</span>
+                    <span class="value" id="orbit-ant-az">--.-°</span>
+                  </span>
+                  <span class="metric-pill">
+                    <span class="label">Your El</span>
+                    <span class="value" id="orbit-ant-el">--.-°</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: EME measurement charts -->
+        <div class="col-xl-8 col-lg-7">
+          <div class="glass-card mb-3">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">EME Distance over Time</span>
+              <span class="badge bg-secondary-subtle text-secondary-emphasis small">
+                last measurements
+              </span>
+            </div>
+            <div class="card-body">
+              <canvas id="distChart" height="140"></canvas>
+            </div>
+          </div>
+
+          <div class="glass-card">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">SNR over Time</span>
+              <span class="badge bg-secondary-subtle text-secondary-emphasis small">
+                dummy data until real RX is wired
+              </span>
+            </div>
+            <div class="card-body">
+              <canvas id="snrChart" height="140"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Status bar (sticky bottom, re-used) -->
+  <div id="status-bar" class="statusbar">
+    {{ state.status }}
+  </div>
+
+  <!-- Shared JS -->
+  <script src="/static/app.js"></script>
+
+  <!-- Data-page init (relies on helpers we add in app.js) -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      if (typeof initDataPage === "function") {
+        initDataPage();
+      }
+    });
+  </script>
+</body>
+</html>
