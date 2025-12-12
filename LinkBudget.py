@@ -21,7 +21,8 @@ NF = 10*np.log10(F)
 F2 = Flna + (L1 -1)/Glna + ((L2 -1)*L1)/Glna + ((Fusrp -1)*L1*L2)/Glna
 NF2 = 10*np.log10(F2)
 
-Loneway = -147.6 + 20*np.log10(363104000) + 20*np.log10(f)
+Loneway = -147.6 + 20*np.log10(405696000) + 20*np.log10(f/9)
+print(NF)
 
 #https://hamradio.engineering/eme-path-loss-free-space-loss-passive-reflector-loss/
 r = 1737400
@@ -30,17 +31,20 @@ MoonG = 10*np.log10(4*np.pi) + 10* np.log10(EffA) + 20*np.log10(f) - 20*np.log10
 refcoeff = 0.065
 refL = 10*np.log10(refcoeff)
 
-GainAnt = 26
+GainAnt = 9
 # Prx = (((c/f)**2)/(4*np.pi)**3) * GainAnt**2 * (50/r**4) * EffA
 
 # Lp = 20*np.log10((4*np.pi)) + 40*np.log10(r) + 20*np.log10(f) - 20*np.log10(c) - 10*np.log10(EffA) # S342 Eq. 10.4 PTx * G * G * Lp = PRx
 
-lam = (c/f)
+lam = (c/(f/9))
 G_lin = EffA/((lam**2)/(4*np.pi))
-G = 10*np.log10(G_lin)
+G = 10*np.log10(refcoeff*G_lin)
+print(G)
 
 B = 10*np.log10(0.5)
 SNR = 0
-P0 = N0 + B + NF + SNR + Loneway*2 - 2*GainAnt - G - refL
+P0 = N0 + B + NF + SNR + Loneway*2 - 2*GainAnt - G #- refL
+
+print(2*Loneway - 2*GainAnt - G)
 
 print(f'{P0} dBm & {10**(P0/10)/1000} W')

@@ -54,7 +54,7 @@ if __name__ == "__main__":
     Nchain = 80
     c = 299792458 #m/s
     
-    tx, rx = read_files('erste_Versuch_tx.bin', 'rx_abgleich.bin')
+    tx, rx = read_files('binforMorse.bin', 'rx_abgleich.bin')
 
     # tx, rx_dopp = read_files('erste_Versuch_tx.bin', 'rx_abgleich_dopp.bin')
     

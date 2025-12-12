@@ -50,8 +50,8 @@ APP_PASSWORD = os.getenv("APP_PASSWORD", "eme")
 
 
 CAMERA_SOURCE = os.getenv("CAMERA_SOURCE")
-if not CAMERA_SOURCE:
-    raise RuntimeError("CAMERA_SOURCE environment variable not set")
+# if not CAMERA_SOURCE:
+#     raise RuntimeError("CAMERA_SOURCE environment variable not set")
 
 camera = CameraStream(src=CAMERA_SOURCE, jpeg_quality=80)
 

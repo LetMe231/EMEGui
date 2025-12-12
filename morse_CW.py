@@ -118,7 +118,7 @@ if __name__ == "__main__":
     
     save_path = r'C:\Users\yves.looser\OneDrive - OST\Dokumente/binforMorse.bin'  
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    (morseinc).astype('<f4').ravel().tofile(save_path)
+    ((morseinc+1)/2).astype('<f4').ravel().tofile(save_path)
     print('Saved to:', save_path)
     print(len(morseinc))
     

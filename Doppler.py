@@ -89,7 +89,7 @@ def moon_vel(obs, delta_s = 2.304):
 
 def doppler(f_tx, v_rel):
     c = 299792458 #m/s
-    return #((v_rel/c)*f_tx)/np.sqrt(1-(v_rel**2/c**2))
+    return -2*((v_rel/c)*f_tx)/np.sqrt(1-(v_rel**2/c**2))
 
 def doppler_fitting(samp, f_doppler, Fs=20000):
     n = np.arange(len(samp))
@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
         d = moon_dist(obsn)
         v, vdt = moon_vel(obsn)
-        f = doppler(ftx, moon_vel(obsn)[0])
+        f = doppler(ftx, moon_vel(obsn, 0.1)[0])
 
         dist_vec.append(d)
         v_vec.append(v)
@@ -151,8 +151,8 @@ if __name__ == "__main__":
     ax.plot(t, doppler_vec)
     plt.show()
 
-    v ,vdt= moon_vel(obs, 10)
+    # v ,vdt= moon_vel(obs, 10)
 
-    frx = doppler(1296000000, v)
+    # frx = doppler(1296000000, v)
 
-    print(frx)
+    # print(frx)
