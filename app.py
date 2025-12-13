@@ -23,6 +23,8 @@ from dotenv import load_dotenv
 from Test_CW_gnu import testSpeci
 import signal
 import sys
+from collections import deque
+from queue import Queue, Empty
 
 import serial.tools.list_ports
 from flask import (
@@ -41,6 +43,10 @@ from camera import CameraStream, mjpeg_generator
 from serialComm import SerialAntenna
 from serialSwitch import SerialSwitch
 import CalcMoonPos
+import logging
+
+# Silence Flask/Werkzeug request logs (GET/POST lines), keep errors
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 measurements = []
 # -----------------------------------------------------------------------------
@@ -92,6 +98,14 @@ CABLE_MARGIN = 30           # safety margin before wrap
 AZ_OFFSET_DEG = 0           # offset if your mount is shifted
 AZ_FLIP_180 = False         # quick flip by 180° if reference is inverted
 
+# --- Measurement live console (SSE) ---
+MEAS_LOG_MAX = 3000
+meas_log = deque(maxlen=MEAS_LOG_MAX)     # keeps recent lines
+meas_stream = Queue()                     # pushes lines to connected browsers
+meas_lock = threading.Lock()
+meas_running = False
+
+
 # Shared state dictionary exposed through /status
 state: Dict[str, Any] = {
     "connected": False,
@@ -140,6 +154,18 @@ def stop_tracking_worker() -> None:
     tracking_thread = None
     state["tracking"] = False
 
+def meas_print(line: str) -> None:
+    """Append a line to measurement log + push to SSE listeners."""
+    ts = datetime.now().strftime("%H:%M:%S")
+    msg = f"[{ts}] {line}".rstrip()
+
+    with meas_lock:
+        meas_log.append(msg)
+
+    try:
+        meas_stream.put_nowait(msg)
+    except Exception:
+        pass
 
 # -----------------------------------------------------------------------------
 # Status manager / decorator
@@ -882,86 +908,137 @@ def tracker():
 # -----------------------------------------------------------------------------
 # Start a measurement
 # -----------------------------------------------------------------------------
-from flask import jsonify
-
 @app.post("/measurement/start")
-def measurement_start():
-    """
-    Placeholder endpoint to start a Moon distance measurement.
-
-    TODO (later):
-      - Check current controller state (connected, tracking, moon locked).
-      - If not in TX mode:
-          - command Pico coax: TX path (e.g. S1=1, S2=2, S3=2)
-      - Trigger TX pulse on the radio / PA.
-      - After pulse is sent, switch coax to RX path (e.g. S1=2, S2=1, S3=1).
-      - Arm receive chain, timestamp outgoing & incoming signals.
-      - Compute round-trip time Δt and distance d = c * Δt / 2.
-      - Store the result and expose it via /status or a dedicated endpoint.
-    """
-
-    # For now we just do a couple of basic sanity checks if you want:
-
-    # If you already have some global/state object, you can plug it here.
-    # For example (PSEUDO):
-    # if not state.connected:
-    #     return jsonify(success=False, status="Cannot start measurement: controller not connected"), 400
-    # if not state.tracking:
-    #     return jsonify(success=False, status="Cannot start measurement: tracking is off"), 400
-    # if not getattr(state, "locked", False):
-    #     return jsonify(success=False, status="Cannot start measurement: Moon not locked"), 400
-
- # --- TEMP: generate a fake measurement so charts have something to show ---
-    
-
-    if state["coax_mode"] != 'tx':
-        coax_toggle_mode()
-    tb=testSpeci()
-    # def sig_handler(sig=None, frame=None):
-    #     tb.stop()
-    #     tb.wait()
-
-    #     sys.exit(0)
-
-    # signal.signal(signal.SIGINT, sig_handler)
-    # signal.signal(signal.SIGTERM, sig_handler)
-
-    tb.start()
-    time.sleep(2.1)
-    coax_toggle_mode()
-    tb.wait()
-    
-    return jsonify(
-        success=True,
-        status="Measurement sequence would start now (dummy data added).",
-    )
-
-@app.route("/coax/toggle_mode", methods=["POST"])
 @require_auth
 @api_action
-def coax_toggle_mode():
-    """
-    Toggle all three coax relays between TX and RX presets.
+def measurement_start():
+    global meas_running
 
-    TX preset: S1=1, S2=2, S3=2
-    RX preset: S1=2, S2=1, S3=1
+    if meas_running:
+        return jsonify(success=False, status="Measurement already running"), 409
+
+    if not state.get("connected"):
+        return jsonify(success=False, status="Controller not connected"), 400
+
+    def meas_stderr(line: str) -> None:
+        if (line or "").lstrip().startswith("[INFO]"):
+            meas_print(line)
+        else:
+            meas_print("ERR: " + line)
+
+    def worker():
+        global meas_running
+        meas_running = True
+        meas_print("=== Measurement started ===")
+
+        restore_logging = None
+        fd_out = None
+        fd_err = None
+
+        try:
+            # redirect Python logging into meas console (prevents "--- Logging error ---")
+            restore_logging = install_meas_logging(meas_print)
+
+            # Try to capture GNU Radio / UHD stdout+stderr
+            try:
+                fd_out = _FdTee(1, meas_print)
+                fd_err = _FdTee(2, meas_stderr)
+                fd_out.__enter__()
+                fd_err.__enter__()
+                meas_print("Console capture: FD tee enabled")
+            except Exception as e:
+                fd_out = None
+                fd_err = None
+                meas_print(f"Console capture: FD tee FAILED ({type(e).__name__}: {e})")
+                meas_print("Continuing without FD tee (you will still see meas_print + Python logging).")
+
+            meas_print(f"Current coax_mode={state.get('coax_mode')!r}")
+
+            if state.get("coax_mode") != "tx":
+                meas_print("Switching coax to TX preset...")
+                ok, payload = coax_toggle_mode_internal()
+                if not ok:
+                    raise RuntimeError(payload.get("status", "Coax toggle failed"))
+                meas_print("Coax switched to TX.")
+
+            meas_print("Starting GNU Radio flowgraph...")
+            tb = testSpeci()
+
+            tb.start()
+            meas_print("Flowgraph started. Sleeping 2.1s before switching to RX...")
+            time.sleep(2.1)
+
+            meas_print("Switching coax to RX preset...")
+            ok, payload = coax_toggle_mode_internal()
+            if not ok:
+                raise RuntimeError(payload.get("status", "Coax toggle failed"))
+            meas_print("Coax switched to RX.")
+
+            meas_print("Waiting for flowgraph to finish...")
+            tb.wait()
+            meas_print("Flowgraph finished.")
+
+            # Drain (only if your _FdTee has close_and_drain)
+            if fd_out and hasattr(fd_out, "close_and_drain"):
+                fd_out.close_and_drain(timeout=1.5)
+            if fd_err and hasattr(fd_err, "close_and_drain"):
+                fd_err.close_and_drain(timeout=1.5)
+
+            meas_print("=== Measurement finished OK ===")
+
+        except Exception as e:
+            meas_print(f"=== Measurement FAILED: {type(e).__name__}: {e} ===")
+        finally:
+            try:
+                if fd_out and hasattr(fd_out, "close_and_drain"):
+                    fd_out.close_and_drain(timeout=0.2)
+            except Exception:
+                pass
+            try:
+                if fd_err and hasattr(fd_err, "close_and_drain"):
+                    fd_err.close_and_drain(timeout=0.2)
+            except Exception:
+                pass
+            try:
+                if restore_logging:
+                    restore_logging()
+            except Exception:
+                pass
+
+            meas_running = False
+
+    threading.Thread(target=worker, daemon=True).start()
+    return jsonify(success=True, status="Measurement started (live console running).")
+
+@app.post("/measurement/console")
+@require_auth
+@api_action
+def measurement_console_write():
+    txt = (request.form.get("text") or "").strip()
+    if not txt:
+        return jsonify(success=False, status="No text"), 400
+    meas_print(f">>> {txt}")
+    return jsonify(success=True, status="OK")
+
+def coax_toggle_mode_internal():
+    """
+    Context-free version of coax toggle. Safe to call from background threads.
+    Returns: (success: bool, payload: dict)
     """
     global switch
 
-    # Same connectivity check as /coax/<sid>/<side>
     if not (
         switch
         and getattr(switch, "ser", None)
         and switch.ser.is_open
         and state.get("switch_connected")
     ):
-        set_status("error", "Pico switch not connected")
-        return jsonify(success=False, status=state["status"]), 500
+        # IMPORTANT: do not call set_status() here if it uses request context
+        state["status"] = "Pico switch not connected"
+        return False, {"status": state["status"]}
 
     switches = state.get("switches") or {}
 
-    # Determine current mode: try explicit state["coax_mode"] first,
-    # fall back to inferring from S1/S2/S3.
     current_mode = state.get("coax_mode")
     s1 = switches.get("S1")
     s2 = switches.get("S2")
@@ -973,8 +1050,7 @@ def coax_toggle_mode():
         elif s1 == "2" and s2 == "1" and s3 == "1":
             current_mode = "rx"
         else:
-            # Unknown / mixed state → treat as RX so first toggle goes to TX
-            current_mode = "rx"
+            current_mode = "rx"  # unknown/mixed -> next toggle goes to TX
 
     if current_mode == "tx":
         new_mode = "rx"
@@ -986,7 +1062,6 @@ def coax_toggle_mode():
         label = "TX"
 
     all_resp = {}
-    # Send all three commands under the same serial lock
     with serial_lock:
         for sid in (1, 2, 3):
             side = target[f"S{sid}"]
@@ -999,14 +1074,30 @@ def coax_toggle_mode():
 
     state["switches"] = switches
     state["coax_mode"] = new_mode
-    set_status("ok", f"Coax relays set to {label} preset")
+    state["status"] = f"Coax relays set to {label} preset"
 
-    return jsonify(
-        success=True,
-        mode=new_mode,
-        switches=switches,
-        status=f"Coax relays set to {label} preset (S1={target['S1']}, S2={target['S2']}, S3={target['S3']})",
-    )
+    payload = {
+        "success": True,
+        "mode": new_mode,
+        "switches": switches,
+        "status": f"Coax relays set to {label} preset (S1={target['S1']}, S2={target['S2']}, S3={target['S3']})",
+    }
+    return True, payload
+
+
+@app.route("/coax/toggle_mode", methods=["POST"])
+@require_auth
+@api_action
+def coax_toggle_mode():
+    ok, payload = coax_toggle_mode_internal()
+    if not ok:
+        # route can still call set_status safely (it has request context)
+        set_status("error", payload.get("status", "Pico switch not connected"))
+        return jsonify(success=False, status=state.get("status", "Error")), 500
+
+    set_status("ok", payload.get("status", "OK"))
+    return jsonify(**payload)
+
 
 @app.route("/data")
 def data_page():
@@ -1082,6 +1173,29 @@ def park():
     except Exception as exc:  # noqa: BLE001
         set_status("error", f"Error while parking: {exc}")
         return jsonify(success=False, status=state["status"])
+
+# console route
+
+@app.get("/measurement/stream")
+def measurement_stream():
+    def gen():
+        # Send backlog first
+        with meas_lock:
+            backlog = list(meas_log)
+
+        for line in backlog[-300:]:
+            yield f"data: {line}\n\n"
+
+        # Then live
+        while True:
+            try:
+                line = meas_stream.get(timeout=15)
+                yield f"data: {line}\n\n"
+            except Empty:
+                # keep connection alive
+                yield "data: \n\n"
+
+    return Response(gen(), mimetype="text/event-stream")
 
 
 # -----------------------------------------------------------------------------
@@ -1197,7 +1311,6 @@ def probe_pico_port(port: str, timeout: float = 1.0) -> dict:
 
 
 @app.route("/coax/connect", methods=["POST"])
-@require_auth
 @api_action
 def coax_connect():
     """
@@ -1401,13 +1514,165 @@ def start_background_threads() -> None:
             threading.Thread(target=poll_loop, daemon=True).start()
             _poll_started = True
 
+class _MeasTee:
+    def __init__(self, original, writer):
+        self.original = original
+        self.writer = writer
+
+    def write(self, s):
+        if s:
+            # split to lines so SSE updates “live”
+            for part in s.splitlines():
+                if part.strip():
+                    self.writer(part)
+        return self.original.write(s)
+
+    def flush(self):
+        return self.original.flush()
+
+class _FdTee:
+    """
+    Tee OS-level FD (1 or 2) into a callback, while still forwarding to original FD.
+    WARNING: dup2 affects the whole process while active.
+    """
+    def __init__(self, fd: int, callback):
+        self.fd = fd
+        self.callback = callback
+        self._old_fd_dup = None
+        self._pipe_r = None
+        self._pipe_w = None
+        self._t = None
+
+    def __enter__(self):
+        self._old_fd_dup = os.dup(self.fd)
+        self._pipe_r, self._pipe_w = os.pipe()
+
+        # redirect fd -> pipe write end
+        os.dup2(self._pipe_w, self.fd)
+
+        def _reader():
+            try:
+                with os.fdopen(self._pipe_r, "rb", closefd=True) as r:
+                    while True:
+                        chunk = r.read(4096)
+                        if not chunk:
+                            break
+
+                        # forward to original fd
+                        try:
+                            os.write(self._old_fd_dup, chunk)
+                        except Exception:
+                            pass
+
+                        # callback lines
+                        try:
+                            text = chunk.decode("utf-8", errors="replace")
+                        except Exception:
+                            text = repr(chunk)
+
+                        for line in text.splitlines():
+                            if line.strip():
+                                self.callback(line)
+            except Exception:
+                pass
+
+        self._t = threading.Thread(target=_reader, daemon=True)
+        self._t.start()
+        return self
+
+    def close_and_drain(self, timeout: float = 1.0):
+        """
+        Restore fd and close the write-end so the reader sees EOF and exits,
+        then join the reader thread to drain remaining buffered output.
+        """
+        # restore original fd (stops new bytes entering the pipe)
+        try:
+            if self._old_fd_dup is not None:
+                os.dup2(self._old_fd_dup, self.fd)
+        except Exception:
+            pass
+
+        # closing write-end makes reader exit after draining
+        try:
+            if self._pipe_w is not None:
+                os.close(self._pipe_w)
+                self._pipe_w = None
+        except Exception:
+            pass
+
+        # wait for reader to finish draining
+        try:
+            if self._t is not None:
+                self._t.join(timeout=timeout)
+        except Exception:
+            pass
+
+        # cleanup
+        try:
+            if self._old_fd_dup is not None:
+                os.close(self._old_fd_dup)
+                self._old_fd_dup = None
+        except Exception:
+            pass
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close_and_drain(timeout=1.0)
+
+import logging
+
+class _MeasLogHandler(logging.Handler):
+    def __init__(self, emit_fn, prefix="LOG: "):
+        super().__init__()
+        self.emit_fn = emit_fn
+        self.prefix = prefix
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            if msg and msg.strip():
+                self.emit_fn(self.prefix + msg)
+        except Exception:
+            pass
+
+
+def install_meas_logging(meas_print_fn):
+    """
+    Temporarily route Python logging into meas_print during a measurement.
+    Returns a restore() function.
+    """
+    root = logging.getLogger()
+    old_handlers = list(root.handlers)
+    old_level = root.level
+    old_raise = logging.raiseExceptions
+
+    # Remove existing handlers (they may write to stderr / broken streams)
+    for h in list(root.handlers):
+        root.removeHandler(h)
+
+    h = _MeasLogHandler(meas_print_fn, prefix="LOG: ")
+    h.setLevel(logging.DEBUG)
+    h.setFormatter(logging.Formatter("%(asctime)s %(name)s [%(levelname)s] %(message)s"))
+    root.addHandler(h)
+    root.setLevel(logging.DEBUG)
+
+    # Don’t print “--- Logging error ---” tracebacks
+    logging.raiseExceptions = False
+
+    def restore():
+        root.handlers.clear()
+        for oh in old_handlers:
+            root.addHandler(oh)
+        root.setLevel(old_level)
+        logging.raiseExceptions = old_raise
+
+    return restore
+
 
 @app.before_request
 def ensure_poll_loop_started():
     # This will be called before every request, but the inner logic
     # only starts the thread once thanks to _poll_started + _poll_lock
     start_background_threads()
-
 
 # -----------------------------------------------------------------------------
 # App entry point

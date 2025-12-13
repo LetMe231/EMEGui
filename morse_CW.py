@@ -80,7 +80,7 @@ if __name__ == "__main__":
     closest_time = (moon_closest/c) * 2
     print(closest_time)
 
-    fs = 200000  # samples per second
+    fs = 20000  # samples per second
     wpm = 50  # words per minute
     snr =  80 # target snr
     msg = 'HB9HSR DE HB9HSR AR BT EME RANGE MOON BT RTT MEASUREMENT ONLY BT NO REPLY PSE BT EXPERIMENTAL TX BT TNX BT HB9HSR AR SK' # message
@@ -94,9 +94,9 @@ if __name__ == "__main__":
     morseinc, length1 = set_text(50, 'HB9HSR T', fs)
     morse_tx, lengthtx = set_text(50, 'HB9HSR T', 20000)
 
-    # fig, ax = plt.subplots()
-    # ax.plot(np.arange(morse_tx.size)/20000, morse_tx)
-    # print(morse_tx.size)
+    fig, ax = plt.subplots()
+    ax.plot(np.arange(morse_tx.size)/20000, morse_tx)
+    print(morse_tx.size)
     # plt.show()
 
     # spülung = np.zeros([600000])
@@ -158,7 +158,7 @@ if __name__ == "__main__":
     # t_morse2 = np.arange(0,length2, 1/fs)
     # t_corr2 = np.arange(0,2*length2, 1/fs)[:-1]
 
-    # fig, ax = plt.subplots(2,4)
+    # fig, ax = plt.subplots()
     # ax[0,0].plot(t_morse, morse)
     # ax[0,0].set_title('Morse für LANG')
     
@@ -226,20 +226,15 @@ if __name__ == "__main__":
     # #     if n >= 2:
     # #          break
 
-    # ax[0,3].plot(t_chip, chips)
-    # ax[0,3].set_title('PN-Signal')
+    # ax.plot(t_chip, chips)
+    # ax.set_title('PN-Sequence')
+    # ax.set_xlabel("Time in s")
+    # ax.set_ylabel("Amplitude")
+    # ax.grid(True)
 
-    # corr_pn = np.round(np.correlate(chips, noisy_pn, mode='full'))
-    # peaks3 = find_peaks(corr_pn, 1)
-    # peaks3_v = corr_pn[peaks3[0]]
-    # ax[1,3].plot(t_chip_corr, corr_pn)
-    # n = 0
-    # for i in np.sort(peaks3_v)[::-1].astype(int):
-    #     idx = np.where(corr_pn == i)[0][0]
-    #     ax[1,3].scatter(t_chip_corr[idx], corr_pn[idx])
-    #     ax[1,3].annotate(i, (t_chip_corr[idx], corr_pn[idx]))
-    #     n += 1
-    #     if n >= 2:
-    #          break
 
-    # plt.show()
+    # corr_pn = np.round(np.correlate(chips, chips, mode='full'))
+    # ax[1].plot(t_chip_corr, corr_pn)
+   
+
+    plt.show()

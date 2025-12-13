@@ -1,12 +1,20 @@
-/* Layout & background */
+/* =========================
+   MD-01 Unified Styles
+   Paste as /static/style.css
+   ========================= */
+
+/* ---------- Layout & background ---------- */
 :root {
   --app-bg: radial-gradient(circle at top, #202040 0, #050510 45%, #020309 100%);
   --card-bg: rgba(15, 18, 35, 0.88);
   --card-border: rgba(255, 255, 255, 0.06);
   --card-shadow: 0 18px 45px rgba(0, 0, 0, 0.6);
+
   --accent: #19c6ff;
   --accent-soft: rgba(25, 198, 255, 0.18);
+
   --danger-soft: rgba(220, 53, 69, 0.2);
+
   --text-normal: #f5f7ff;
   --text-muted: #9ca3af;
 }
@@ -20,13 +28,57 @@ body.app-body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* Subtle “glass” container */
+/* ---- FULL-WIDTH LAYOUT OVERRIDE ---- */
 .app-shell {
-  max-width: 1400px;
-  padding: 1.5rem 1.5rem 3.2rem; /* top/right/left/bottom */
+  max-width: none !important;      /* remove 1400px cap */
+  width: 100%;
+  padding: 1.5rem 2.2rem 3.2rem;   /* a bit more side padding */
 }
 
-/* Glass cards */
+/* On very large screens give it more breathing room */
+@media (min-width: 1400px) {
+  .app-shell {
+    padding-left: 3rem;
+    padding-right: 3rem;
+  }
+}
+
+/* Make cards a touch bigger / roomier */
+.glass-card .card-body {
+  padding: 1.25rem 1.65rem 1.45rem;
+}
+.glass-card .card-header {
+  padding: 0.95rem 1.55rem;
+}
+
+/* ---- HEADER: KEEP CONNECT BLOCKS ON ONE LINE ---- */
+.header-right-wrap {
+  flex-wrap: nowrap !important;
+  white-space: nowrap;
+}
+
+.header-connect-form {
+  flex-wrap: nowrap !important;
+  white-space: nowrap;
+}
+
+.header-connect-form select.form-select-sm {
+  min-width: 120px;   /* prevents select collapsing */
+}
+
+.header-connect-form .btn {
+  min-width: 110px;   /* prevents Connect/Disconnect width shift */
+}
+
+.connection-pill {
+  min-width: 140px;   /* reserve space so "Connected"/"Not connected" doesn't reflow */
+  display: inline-flex;
+  justify-content: center;
+}
+
+
+
+/* ---------- Glass cards ---------- */
 .glass-card {
   background: var(--card-bg);
   border-radius: 1.1rem;
@@ -40,14 +92,24 @@ body.app-body {
 
 .glass-card .card-header {
   background: transparent;
-  padding: 0.9rem 1.4rem;
+  padding: 0.75rem 1.1rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .glass-card .card-body {
   padding: 1.15rem 1.5rem 1.35rem;
 }
 
-/* Brand & header */
+body.dark-mode .glass-card {
+  background: rgba(8, 11, 30, 0.92);
+}
+
+/* Ensure sections don’t touch too tightly */
+section {
+  margin-bottom: 1.25rem;
+}
+
+/* ---------- Brand ---------- */
 .brand-icon {
   width: 38px;
   height: 38px;
@@ -59,30 +121,52 @@ body.app-body {
   font-size: 1.4rem;
 }
 
+/* Logo pill used in templates */
+.logo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+.logo-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(25, 198, 255, 0.45);
+}
+.logo-text {
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
 
-/* Connection dot */
+/* ---------- Connection indicator ---------- */
+.connection-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.45);
+}
+
 .connection-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
+  background: #27c361; /* connected default */
   box-shadow: 0 0 12px rgba(72, 187, 120, 0.8);
-  background: #27c361;
 }
-
-/* You can toggle this class from JS if you want a “disconnected” style */
 .connection-dot.offline {
   background: #ff4c4c;
   box-shadow: 0 0 12px rgba(255, 76, 76, 0.8);
 }
 
-/* Canvases */
-canvas {
-  background: transparent;
-  border-radius: 0.75rem;
-  width: 100%;
-  height: auto;
-}
-
+/* ---------- Text helpers ---------- */
 .dial-texts .status-text {
   font-size: 0.85rem;
   color: var(--text-normal);
@@ -93,7 +177,12 @@ canvas {
   color: #ffd54a;
 }
 
-/* Legends */
+.small,
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+/* ---------- Legends ---------- */
 .legend-dot {
   display: inline-block;
   width: 9px;
@@ -102,20 +191,11 @@ canvas {
   vertical-align: middle;
   margin-right: 4px;
 }
+.legend-dot-antenna { background: #00a2ff; }
+.legend-dot-moon { background: #ffd54a; }
+.legend-dot-park { background: #9ca3af; }
 
-.legend-dot-antenna {
-  background: #00a2ff;
-}
-
-.legend-dot-moon {
-  background: #ffd54a;
-}
-
-.legend-dot-park {
-  background: #9ca3af;
-}
-
-/* Camera block */
+/* ---------- Camera block ---------- */
 .cam-fs-container {
   position: relative;
   background: radial-gradient(circle at center, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.9));
@@ -128,6 +208,7 @@ canvas {
   width: 100%;
   height: auto;
   object-fit: cover;
+  border-radius: 0.9rem;
 }
 
 /* Overlay when no video */
@@ -139,13 +220,12 @@ canvas {
   align-items: center;
   justify-content: center;
 }
-
 .cam-overlay-inner {
   text-align: center;
   color: #f87171;
 }
 
-/* D-pad as a 3x3 grid */
+/* ---------- D-pad ---------- */
 .dpad-wrap {
   display: grid;
   grid-template-columns: repeat(3, 2.75rem);
@@ -155,29 +235,11 @@ canvas {
   margin-top: 0.2rem;
   margin-bottom: 0.8rem;
 }
+#upBtn { grid-column: 2; grid-row: 1; }
+#leftBtn { grid-column: 1; grid-row: 2; }
+#rightBtn { grid-column: 3; grid-row: 2; }
+#downBtn { grid-column: 2; grid-row: 3; }
 
-/* Position each button in the grid */
-#upBtn {
-  grid-column: 2;
-  grid-row: 1;
-}
-
-#leftBtn {
-  grid-column: 1;
-  grid-row: 2;
-}
-
-#rightBtn {
-  grid-column: 3;
-  grid-row: 2;
-}
-
-#downBtn {
-  grid-column: 2;
-  grid-row: 3;
-}
-
-/* Arrow button styling */
 .arrow.btn {
   width: 2.75rem;
   height: 2.75rem;
@@ -188,7 +250,7 @@ canvas {
   padding: 0;
 }
 
-/* Coax area */
+/* ---------- Coax area ---------- */
 .coax-grid {
   display: flex;
   flex-direction: column;
@@ -208,11 +270,13 @@ canvas {
   text-transform: uppercase;
   color: var(--text-muted);
 }
+
 #coax-status {
   font-size: 0.8rem;
   color: var(--text-normal);
   opacity: 0.9;
 }
+
 /* Coax connection indicator */
 .coax-conn small {
   color: var(--text-muted);
@@ -222,29 +286,127 @@ canvas {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #f97373;                   /* offline by default */
+  background: #f97373; /* offline default */
   box-shadow: 0 0 8px rgba(248, 113, 113, 0.8);
 }
-
 .coax-dot.online {
   background: #22c55e;
   box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
 }
 
-/* Coax current position highlight */
+/* Coax current position highlight (control page buttons) */
 .coax-btn-active {
   background: var(--accent-soft) !important;
   color: #e5f9ff !important;
   border-color: var(--accent) !important;
 }
 
-#coax-status {
-  font-size: 0.8rem;
-  color: var(--text-normal);
-  opacity: 0.9;
+/* Read-only coax pills (data view) */
+.coax-grid-readonly .coax-row {
+  gap: 0.5rem;
+}
+.coax-pill-group {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+.coax-pill {
+  min-width: 1.6rem;
+  padding: 0.08rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(6px);
 }
 
-/* Status bar at bottom */
+.coax-pill--active-1 {
+  background: var(--accent-soft);
+  color: #e5f9ff;
+  border-color: var(--accent);
+  box-shadow: 0 0 10px rgba(25, 198, 255, 0.7);
+}
+.coax-pill--active-2 {
+  background: var(--danger-soft);
+  color: #fee2e2;
+  border-color: #f97373;
+  box-shadow: 0 0 10px rgba(248, 113, 113, 0.7);
+}
+
+/* ---------- RF schematic (unified; remove inline schematic CSS in HTML) ---------- */
+.coax-schematic-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+#rf-schematic {
+  width: 100%;
+  max-width: 100%;
+  height: 220px;
+  background: rgba(2, 6, 23, 0.55);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+#rf-schematic text {
+  fill: rgba(245, 247, 255, 0.88);
+  font-size: 11px;
+}
+#rf-schematic .hint {
+  font-size: 10px;
+  fill: rgba(156, 163, 175, 0.8);
+  text-anchor: middle;
+}
+#rf-schematic .wire {
+  stroke: rgba(156, 163, 175, 0.35);
+  stroke-width: 2;
+  fill: none;
+  transition: stroke 120ms ease, stroke-width 120ms ease;
+}
+#rf-schematic .wire.active {
+  stroke: #22c55e;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.45));
+}
+#rf-schematic .wire.error {
+  stroke: #f97373;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px rgba(248, 113, 113, 0.55));
+}
+#rf-schematic .switch-terminal {
+  fill: rgba(2, 6, 23, 0.75);
+  stroke: rgba(156, 163, 175, 0.8);
+  stroke-width: 1.2;
+}
+#rf-schematic .switch-com {
+  fill: rgba(2, 6, 23, 0.75);
+  stroke: rgba(245, 247, 255, 0.9);
+  stroke-width: 1.4;
+}
+#rf-schematic .switch-handle {
+  stroke: rgba(245, 247, 255, 0.88);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+#rf-schematic .switch-label {
+  font-size: 11px;
+  text-anchor: middle;
+  fill: rgba(245, 247, 255, 0.88);
+}
+#rf-schematic .amp-body {
+  fill: rgba(2, 6, 23, 0.75);
+  stroke: rgba(203, 213, 245, 0.7);
+  stroke-width: 1.5;
+}
+#rf-schematic .amp-label {
+  font-size: 10px;
+  text-anchor: middle;
+  fill: rgba(245, 247, 255, 0.88);
+}
+
+/* ---------- Status bar ---------- */
 .statusbar {
   position: fixed;
   left: 0;
@@ -263,47 +425,27 @@ canvas {
   z-index: 1000;
 }
 
-/* Levels (used by your JS: statusbar--info/busy/error/ok/etc.) */
+/* Levels (used by JS: statusbar--info/busy/error/ok/etc.) */
 .statusbar--info {
   background: linear-gradient(90deg, rgba(59, 130, 246, 0.25), rgba(15, 23, 42, 0.96));
 }
-
 .statusbar--busy {
   background: linear-gradient(90deg, rgba(234, 179, 8, 0.25), rgba(15, 23, 42, 0.96));
 }
-
 .statusbar--error {
   background: linear-gradient(90deg, rgba(248, 113, 113, 0.28), rgba(15, 23, 42, 0.96));
 }
-
 .statusbar--ok {
   background: linear-gradient(90deg, rgba(34, 197, 94, 0.25), rgba(15, 23, 42, 0.96));
 }
 
-/* Make sure your JS can set: bar.className = 'statusbar statusbar--xyz' */
-.statusbar[data-level="busy"]::before {
-  content: "⏳ ";
-  margin-right: 4px;
-}
+/* Optional: data-level icons */
+.statusbar[data-level="busy"]::before { content: "⏳ "; margin-right: 4px; }
+.statusbar[data-level="error"]::before { content: "⚠️ "; margin-right: 4px; }
+.statusbar[data-level="ok"]::before { content: "✅ "; margin-right: 4px; }
+.statusbar[data-level="info"]::before { content: "ℹ️ "; margin-right: 4px; }
 
-.statusbar[data-level="error"]::before {
-  content: "⚠️ ";
-  margin-right: 4px;
-}
-
-.statusbar[data-level="ok"]::before {
-  content: "✅ ";
-  margin-right: 4px;
-}
-
-.statusbar[data-level="info"]::before {
-  content: "ℹ️ ";
-  margin-right: 4px;
-}
-
-body.dark-mode .glass-card {
-  background: rgba(8, 11, 30, 0.92);
-}
+/* ---------- Page-specific padding tweaks you had ---------- */
 .card-connection .card-body,
 .card-target .card-body {
   padding: 1.1rem 1.4rem 1.25rem;
@@ -316,24 +458,7 @@ body.dark-mode .glass-card {
   }
 }
 
-
 /* Slight extra spacing around the target inputs */
-.card-target form#setForm {
-  gap: 0.5rem;
-}
-
-/* Ensure sections don’t touch too tightly */
-section {
-  margin-bottom: 1.6rem;
-}
-
-/* Slightly round the inputs so they don't look glued to edges */
-.card-connection .form-select,
-.card-target .form-control {
-  border-radius: 0.6rem;
-}
-
-/* Make target form breathe a bit on bigger screens */
 .card-target form#setForm {
   gap: 0.5rem;
 }
@@ -343,134 +468,303 @@ section {
   justify-content: center;
 }
 
-/* Small tweaks */
-.small,
-.text-muted {
-  color: var(--text-muted) !important;
-}
-
-/* Responsive tweaks */
+/* ---------- Responsive tweaks ---------- */
 @media (max-width: 576px) {
   .glass-card {
     border-radius: 0.9rem;
   }
-
   .statusbar {
     font-size: 0.8rem;
     padding-inline: 8px;
   }
 }
 
-/* Read-only coax pills (data view) */
-.coax-grid-readonly .coax-row {
-  gap: 0.5rem;
+/* ==========================================================
+   UNIFIED BOOTSTRAP THEMING (prevents “random” default look)
+   Put at end so it wins
+   ========================================================== */
+
+/* Navbar look */
+.navbar {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  backdrop-filter: blur(14px);
+}
+.navbar .nav-link {
+  color: rgba(245, 247, 255, 0.78);
+}
+.navbar .nav-link.active {
+  color: var(--text-normal);
+  font-weight: 650;
+}
+.navbar-toggler {
+  border-color: rgba(148, 163, 184, 0.22);
 }
 
-.coax-pill-group {
-  display: inline-flex;
-  gap: 0.25rem;
+/* Buttons */
+.btn {
+  border-radius: 0.8rem;
+}
+.btn-outline-light,
+.btn-outline-secondary,
+.btn-outline-info,
+.btn-outline-success,
+.btn-outline-warning,
+.btn-outline-danger {
+  border-color: rgba(148, 163, 184, 0.28) !important;
+}
+.btn-outline-light {
+  color: rgba(245, 247, 255, 0.88) !important;
+}
+.btn-outline-light:hover {
+  background: rgba(148, 163, 184, 0.12);
 }
 
-.coax-pill {
-  min-width: 1.6rem;
-  padding: 0.08rem 0.45rem;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.6);
-  font-size: 0.75rem;
-  line-height: 1.2;
-  text-align: center;
-  color: var(--text-muted);
-  background: rgba(15, 23, 42, 0.8);
-  backdrop-filter: blur(6px);
+/* Inputs / selects / input-group */
+.form-control,
+.form-select,
+.input-group-text {
+  background: rgba(2, 6, 23, 0.55) !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  color: var(--text-normal) !important;
+}
+.form-control::placeholder {
+  color: rgba(156, 163, 175, 0.55) !important;
+}
+.input-group-text {
+  color: rgba(245, 247, 255, 0.72) !important;
 }
 
-/* Active position colors: 1 = blue-ish, 2 = red-ish */
-.coax-pill--active-1 {
-  background: var(--accent-soft);
-  color: #e5f9ff;
-  border-color: var(--accent);
-  box-shadow: 0 0 10px rgba(25, 198, 255, 0.7);
+/* Badges */
+.badge {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  font-weight: 650;
 }
 
-.coax-pill--active-2 {
-  background: var(--danger-soft);
-  color: #fee2e2;
-  border-color: #f97373;
-  box-shadow: 0 0 10px rgba(248, 113, 113, 0.7);
-}
-
-/* RF schematic for coax switches -------------------------------------- */
-.coax-schematic-wrap {
-  display: flex;
-  justify-content: center;
-}
-
-#rf-schematic {
-  background: #181820;
+/* Canvases: charts should be transparent.
+   Give frames only to dials + orbit for consistency. */
+canvas {
+  background: transparent;
+  border: 0;
   border-radius: 0.75rem;
-  border: 1px solid #333;
+  width: 100%;
+  height: auto;
+}
+
+/* Dial canvases */
+#azCanvas,
+#elCanvas {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.35);
+  max-height: 350px;
+  width: auto !important;
+  max-width: 100%;
+  margin:0 auto;
+}
+
+/* Orbit canvas is circular; keep its own border/shadow */
+#orbitCanvas {
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
+}
+
+.app-console{
+  height: 220px;
+  overflow: auto;
+  padding: 0.9rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(2, 6, 23, 0.55);
+  color: rgba(245, 247, 255, 0.9);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left !important;
+}
+
+/* =======================
+   Balanced full-width layout
+   ======================= */
+
+/* Prevent horizontal scroll if something slightly overflows */
+html, body {
+  overflow-x: hidden;
+}
+
+/* Full width, but not "too huge" on big monitors */
+.app-shell {
+  width: 100%;
+  max-width: 1680px;                 /* adjust: 1600–1800 usually feels good */
+  margin-left: auto;
+  margin-right: auto;
+  padding: clamp(12px, 1.6vw, 22px) clamp(12px, 2vw, 26px) 3.2rem;
+}
+
+/* Don’t over-inflate cards */
+.glass-card .card-header {
+  padding: 0.85rem 1.25rem;
+}
+.glass-card .card-body {
+  padding: 1.05rem 1.25rem 1.2rem;
+}
+
+/* Keep canvases responsive */
+canvas {
   max-width: 100%;
   height: auto;
 }
 
+/* =======================
+   Header connect blocks: no-jump, no-overflow
+   ======================= */
+
+/* Default (small/medium screens): allow wrapping so it fits */
+.header-right-wrap {
+  flex-wrap: wrap;
+}
+
+/* Only on large screens keep it on one line */
+@media (min-width: 992px) {
+  .header-right-wrap {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+
+  .header-connect-form {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+}
+
+/* Don’t force large minimums (these caused overflow) */
+.header-connect-form select.form-select-sm {
+  min-width: 0;
+  width: auto;
+}
+
+.header-connect-form .btn {
+  min-width: 0;
+}
+
+/* Reserve a bit of space for the connected label so it doesn’t reflow */
+.connection-pill {
+  min-width: 130px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+/* =======================
+   Make everything less tall (vertical compression)
+   ======================= */
+
+/* Less overall page padding */
+.app-shell {
+  padding-top: 0.9rem !important;
+  padding-bottom: 2.6rem !important; /* keep space above status bar */
+}
+
+/* Sections were adding lots of vertical space */
+section {
+  margin-bottom: 0.9rem !important;
+}
+
+/* Cards: tighter header/body */
+.glass-card .card-header {
+  padding: 0.55rem 1rem !important;
+}
+
+.glass-card .card-body {
+  padding: 0.75rem 1rem 0.9rem !important;
+}
+
+/* Reduce spacing inside dial text blocks */
+.dial-texts p {
+  margin-bottom: 0.25rem !important;
+}
+
+/* Reduce the big page header area */
+header.mb-3 {
+  margin-bottom: 0.75rem !important;
+}
+
+/* Camera container: less minimum height */
+.cam-fs-container {
+  min-height: 120px !important;
+}
+
+/* Orbit canvas: keep it from dominating vertically on laptops */
+#orbitCanvas {
+  max-width: 300px !important;
+}
+
+/* Charts on data page: slightly shorter */
+#distChart,
+#snrChart {
+  height: 120px !important;
+}
+
+/* If any rows feel too tall, tighten bootstrap gutter a bit on large screens */
+@media (min-width: 992px) {
+  .row.g-3 {
+    --bs-gutter-y: 0.75rem;
+  }
+}
+
+/* View page only: make coax + RF schematic a bit taller */
+body.view-page #rf-schematic {
+  height: 280px;            /* bump this up/down as you like */
+  width: 100%;
+  display: block;
+}
+
+body.view-page .coax-schematic-wrap {
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+/* If your schematic is inside a card body, give it a bit more vertical room */
+body.view-page .card-coax .card-body,
+body.view-page .card-rf .card-body {
+  padding-top: 0.9rem;
+  padding-bottom: 0.9rem;
+}
+/* Make RF schematic internals bigger/more readable */
 #rf-schematic text {
-  fill: #ccc;
-  font-size: 11px;
+  font-size: 14px !important;
+  fill: #e5e7eb !important;
 }
 
 #rf-schematic .title {
-  font-size: 14px;
-  font-weight: bold;
-  text-anchor: middle;
+  font-size: 16px !important;
 }
 
 #rf-schematic .hint {
-  font-size: 10px;
-  fill: #999;
-  text-anchor: middle;
+  font-size: 12px !important;
 }
 
 #rf-schematic .wire {
-  stroke: #555;
-  stroke-width: 2;
-  fill: none;
+  stroke-width: 3.2 !important;
 }
 
 #rf-schematic .wire.active {
-  stroke: #00ff66;
-  stroke-width: 3;
-}
-
-#rf-schematic .switch-terminal {
-  fill: #222;
-  stroke: #bbb;
-  stroke-width: 1.2;
-}
-
-#rf-schematic .switch-com {
-  fill: #222;
-  stroke: #fff;
-  stroke-width: 1.4;
+  stroke-width: 4.2 !important;
 }
 
 #rf-schematic .switch-handle {
-  stroke: #eee;
-  stroke-width: 2;
-  stroke-linecap: round;
+  stroke-width: 3.2 !important;
 }
 
-#rf-schematic .switch-label {
-  font-size: 11px;
-  text-anchor: middle;
+#rf-schematic .switch-terminal {
+  stroke-width: 1.8 !important;
+}
+
+#rf-schematic .switch-com {
+  stroke-width: 2.2 !important;
 }
 
 #rf-schematic .amp-body {
-  fill: #222;
-  stroke: #aaa;
-  stroke-width: 1.5;
-}
-
-#rf-schematic .amp-label {
-  font-size: 10px;
-  text-anchor: middle;
+  stroke-width: 2.2 !important;
 }

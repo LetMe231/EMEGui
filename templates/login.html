@@ -4,15 +4,25 @@
   <meta charset="UTF-8" />
   <title>Login – MD-01 Control</title>
 
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="/static/style.css" rel="stylesheet">
 </head>
-<body class="app-body d-flex align-items-center justify-content-center">
+
+<body class="app-body d-flex align-items-center justify-content-center dark-mode">
   <div class="container">
     <div class="row justify-content-center">
-      <div class="col-md-4">
+      <div class="col-md-5 col-lg-4">
         <div class="glass-card p-4">
-          <h1 class="h5 mb-3 text-center fw-bold">Control Login</h1>
+          <div class="d-flex justify-content-center mb-3">
+            <div class="logo-pill">
+              <span class="logo-dot"></span>
+              <span class="logo-text">EME</span>
+            </div>
+          </div>
+
+          <h1 class="h5 mb-2 text-center fw-bold">Control Login</h1>
           <p class="text-muted small text-center mb-3">
             Enter the control password to access the full MD-01 control screen.
           </p>
@@ -24,7 +34,7 @@
           <form method="post" action="{{ url_for('login') }}">
             <input type="hidden" name="next" value="{{ next or url_for('control') }}">
 
-            <div class="mb-3">
+            <div class="mb-3 text-start">
               <label class="form-label small">Password</label>
               <input type="password"
                      name="password"
@@ -43,6 +53,10 @@
               ← Back to data view
             </a>
           </div>
+        </div>
+
+        <div class="text-center mt-3">
+          <small class="text-muted">MD-01 · EME</small>
         </div>
       </div>
     </div>

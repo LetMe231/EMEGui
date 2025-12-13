@@ -2,78 +2,33 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>MD-01 Controller</title>
+  <title>MD-01 - Control</title>
 
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Bootstrap -->
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  >
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
   <!-- Custom styles -->
   <link href="/static/style.css" rel="stylesheet">
 </head>
 
-<body class="app-body text-center" data-can-edit="{{ '1' if can_edit else '0' }}">
-
+<body class="app-body text-center dark-mode" data-can-edit="{{ '1' if can_edit else '0' }}">
   <div class="app-shell container-fluid py-3">
     {% include "navbar.html" %}
 
-    <!-- Connection & Movement Row -->
+    <!-- Target / Movement -->
     <section class="mb-3">
       <div class="row g-3 align-items-stretch">
-
-        <!-- Connection -->
-        <div class="col-lg-4">
-          <div class="glass-card h-100 card-connection">
-            <div class="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3">
-              <span class="fw-semibold">Connection</span>
-              <span class="connection-dot" id="connection-dot"></span>
-            </div>
-            <div class="card-body pt-2">
-              <form id="connectForm" class="d-flex gap-2 mb-2">
-                <select name="port" class="form-select form-select-sm">
-                  {% for p in ports %}
-                    <option value="{{ p }}" {% if state.port == p %}selected{% endif %}>{{ p }}</option>
-                  {% endfor %}
-                </select>
-                <button
-                  type="submit"
-                  class="btn btn-success btn-sm flex-shrink-0"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  Connect
-                </button>
-              </form>
-              <div class="d-flex gap-2 justify-content-between">
-                <button
-                  id="disconnectBtn"
-                  type="button"
-                  class="btn btn-outline-danger btn-sm flex-fill"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  Disconnect
-                </button>
-                <div class="small text-muted text-start">
-                  <div>Port: <span class="fw-semibold" id="connection-port-text">{{ state.port or "—" }}</span></div>
-                  <div>Status: <span class="fw-semibold" id="connection-status-text">Idle</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Movement -->
-        <div class="col-lg-8">
+        <div class="col-12">
           <div class="glass-card h-100 card-target">
-            <div class="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3">
+            <div class="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3 flex-wrap gap-2">
               <span class="fw-semibold">Target Position</span>
               <span class="badge bg-secondary-subtle text-secondary-emphasis">
                 Step 0.1° · Safety below 15°
               </span>
             </div>
+
             <div class="card-body">
               <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
                 <form id="setForm" class="d-flex flex-wrap flex-md-nowrap gap-2 flex-grow-1">
@@ -91,6 +46,7 @@
                       {% if not can_edit %}disabled{% endif %}
                     >
                   </div>
+
                   <div class="input-group input-group-sm">
                     <span class="input-group-text">El</span>
                     <input
@@ -105,39 +61,21 @@
                       {% if not can_edit %}disabled{% endif %}
                     >
                   </div>
-                  <button
-                    type="submit"
-                    class="btn btn-primary btn-sm flex-shrink-0"
-                    {% if not can_edit %}disabled{% endif %}
-                  >
+
+                  <button type="submit" class="btn btn-primary btn-sm flex-shrink-0" {% if not can_edit %}disabled{% endif %}>
                     Set
                   </button>
                 </form>
 
                 <div class="d-flex align-items-center gap-2 ms-md-2">
                   <div class="btn-group btn-group-sm" role="group">
-                    <button
-                      id="trackerBtn"
-                      type="button"
-                      class="btn btn-success"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
+                    <button id="trackerBtn" type="button" class="btn btn-success" {% if not can_edit %}disabled{% endif %}>
                       Tracker Start
                     </button>
-                    <button
-                      id="stopBtn"
-                      type="button"
-                      class="btn btn-warning"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
+                    <button id="stopBtn" type="button" class="btn btn-warning" {% if not can_edit %}disabled{% endif %}>
                       Stop
                     </button>
-                    <button
-                      id="parkBtn"
-                      type="button"
-                      class="btn btn-info"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
+                    <button id="parkBtn" type="button" class="btn btn-info" {% if not can_edit %}disabled{% endif %}>
                       Park
                     </button>
                   </div>
@@ -146,31 +84,27 @@
 
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <div class="form-check form-switch small">
-                  <input
-                    class="form-check-input"
-                    type="checkbox"
-                    id="forceElChk"
-                    {% if not can_edit %}disabled{% endif %}
-                  >
+                  <input class="form-check-input" type="checkbox" id="forceElChk" {% if not can_edit %}disabled{% endif %}>
                   <label class="form-check-label" for="forceElChk">
                     Force tracking below 15°
                   </label>
                 </div>
+
                 <div class="small text-muted ms-auto">
                   <span class="legend-dot legend-dot-antenna"></span> Antenna
                   <span class="legend-dot legend-dot-moon ms-3"></span> Moon
                   <span class="legend-dot legend-dot-park ms-3"></span> Park
                 </div>
               </div>
+
             </div>
           </div>
         </div>
-
       </div>
     </section>
 
-    <!-- Main cards row + measurement -->
-    <section class="mb-4">
+    <!-- Dials + Camera + Manual/Coax -->
+    <section class="mb-3">
       <div class="row g-3">
 
         <!-- Azimuth -->
@@ -191,35 +125,25 @@
           </div>
         </div>
 
-       <!-- Elevation dial (CONTROL PAGE) -->
-      <div class="col-xl-3 col-lg-6">
-        <div class="glass-card h-100">
-          <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
-            <span class="fw-semibold">Elevation Dial</span>
-            <span class="badge bg-dark-subtle text-light-emphasis small">0–90°</span>
-          </div>
-          <div class="card-body">
-            <!-- Canvas for JS drawing -->
-            <canvas id="elCanvas" width="280" height="260" class="rounded"></canvas>
+        <!-- Elevation -->
+        <div class="col-xl-3 col-lg-6">
+          <div class="glass-card h-100">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">Elevation Dial</span>
+              <span class="badge bg-dark-subtle text-light-emphasis small">0–90°</span>
+            </div>
+            <div class="card-body">
+              <canvas id="elCanvas" width="280" height="260" class="rounded"></canvas>
 
-            <div class="mt-3 dial-texts">
-              <p id="elText" class="status-text mb-1">
-                Antenna elevation: --°
-              </p>
-              <p id="elMoonText" class="moon-text mb-1">
-                Moon angle: --°
-              </p>
-              <p id="moonAbove15Text" class="small text-muted mb-1">
-                Next ≥15°: --:--
-              </p>
-              <p id="moonBelow15Text" class="small text-muted mb-0">
-                Next &lt;15°: --:--
-              </p>
+              <div class="mt-3 dial-texts">
+                <p id="elText" class="status-text mb-1">Antenna elevation: --°</p>
+                <p id="elMoonText" class="moon-text mb-1">Moon angle: --°</p>
+                <p id="moonAbove15Text" class="small text-muted mb-1">Next ≥15°: --:--</p>
+                <p id="moonBelow15Text" class="small text-muted mb-0">Next &lt;15°: --:--</p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-
 
         <!-- Camera -->
         <div class="col-xl-3 col-lg-6">
@@ -227,15 +151,12 @@
             <div class="card-header border-0 d-flex justify-content-between align-items-center py-2 px-3">
               <span class="fw-semibold">Antenna Camera</span>
               <div class="btn-group btn-group-sm">
-                <button id="camFsBtn" type="button" class="btn btn-outline-info">
-                  ⛶ Fullscreen
-                </button>
+                <button id="camFsBtn" type="button" class="btn btn-outline-info">⛶ Fullscreen</button>
               </div>
             </div>
 
             <div class="card-body">
               <div id="camFsContainer" class="cam-fs-container rounded overflow-hidden position-relative">
-                <!-- IMPORTANT: src="/video.mjpg" directly -->
                 <img
                   id="camStream"
                   src=""
@@ -244,7 +165,6 @@
                   class="camera-frame w-100"
                 >
 
-                <!-- Overlay controlled by JS -->
                 <div id="camOverlay" class="cam-overlay" hidden>
                   <div class="cam-overlay-inner">
                     <span class="display-6 d-block mb-2">⛔</span>
@@ -271,47 +191,15 @@
 
               <!-- D-pad -->
               <div class="dpad-wrap">
-                <button
-                  id="upBtn"
-                  type="button"
-                  class="btn btn-outline-primary arrow"
-                  aria-label="Jog up"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  ⬆️
-                </button>
-                <button
-                  id="leftBtn"
-                  type="button"
-                  class="btn btn-outline-primary arrow"
-                  aria-label="Jog left"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  ⬅️
-                </button>
-                <button
-                  id="rightBtn"
-                  type="button"
-                  class="btn btn-outline-primary arrow"
-                  aria-label="Jog right"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  ➡️
-                </button>
-                <button
-                  id="downBtn"
-                  type="button"
-                  class="btn btn-outline-primary arrow"
-                  aria-label="Jog down"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  ⬇️
-                </button>
+                <button id="upBtn" type="button" class="btn btn-outline-primary arrow" aria-label="Jog up" {% if not can_edit %}disabled{% endif %}>⬆️</button>
+                <button id="leftBtn" type="button" class="btn btn-outline-primary arrow" aria-label="Jog left" {% if not can_edit %}disabled{% endif %}>⬅️</button>
+                <button id="rightBtn" type="button" class="btn btn-outline-primary arrow" aria-label="Jog right" {% if not can_edit %}disabled{% endif %}>➡️</button>
+                <button id="downBtn" type="button" class="btn btn-outline-primary arrow" aria-label="Jog down" {% if not can_edit %}disabled{% endif %}>⬇️</button>
               </div>
 
               <hr class="my-2">
 
-              <!-- Coax switches -->
+              <!-- Coax -->
               <h6 class="mb-1 d-flex justify-content-between align-items-center">
                 <span>Coax Switches</span>
                 <span class="coax-conn d-inline-flex align-items-center gap-1">
@@ -322,106 +210,32 @@
 
               <div id="coax-status" class="small mb-2 text-start"></div>
 
-              <!-- Pico connection controls -->
-              <form id="coaxConnectForm" class="d-flex gap-2 mb-2">
-                <select
-                  name="port"
-                  class="form-select form-select-sm"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  {% for p in ports %}
-                    <option value="{{ p }}" {% if state.switch_port == p %}selected{% endif %}>
-                      {{ p }}
-                    </option>
-                  {% endfor %}
-                </select>
-                <button
-                  id="coaxConnectBtn"
-                  type="submit"
-                  class="btn btn-success btn-sm"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  Connect
-                </button>
-                <button
-                  id="coaxDisconnectBtn"
-                  type="button"
-                  class="btn btn-outline-danger btn-sm"
-                  {% if not can_edit %}disabled{% endif %}
-                >
-                  Disconnect
-                </button>
-              </form>
-
               <div class="small text-muted mb-2 text-start">
                 Port: <span class="fw-semibold" id="coax-port-text">{{ state.switch_port or "—" }}</span>
               </div>
-
 
               <div class="coax-grid">
                 <div class="coax-row">
                   <span class="coax-label">S1</span>
                   <div class="btn-group btn-group-sm">
-                    <button
-                      id="coax-1-1"
-                      class="btn btn-outline-light coax-btn"
-                      onclick="setCoax(1,'1')"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
-                      1
-                    </button>
-                    <button
-                      id="coax-1-2"
-                      class="btn btn-outline-light coax-btn"
-                      onclick="setCoax(1,'2')"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
-                      2
-                    </button>
+                    <button id="coax-1-1" class="btn btn-outline-light coax-btn" onclick="setCoax(1,'1')" {% if not can_edit %}disabled{% endif %}>1</button>
+                    <button id="coax-1-2" class="btn btn-outline-light coax-btn" onclick="setCoax(1,'2')" {% if not can_edit %}disabled{% endif %}>2</button>
                   </div>
                 </div>
 
                 <div class="coax-row">
                   <span class="coax-label">S2</span>
                   <div class="btn-group btn-group-sm">
-                    <button
-                      id="coax-2-1"
-                      class="btn btn-outline-light coax-btn"
-                      onclick="setCoax(2,'1')"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
-                      1
-                    </button>
-                    <button
-                      id="coax-2-2"
-                      class="btn btn-outline-light coax-btn"
-                      onclick="setCoax(2,'2')"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
-                      2
-                    </button>
+                    <button id="coax-2-1" class="btn btn-outline-light coax-btn" onclick="setCoax(2,'1')" {% if not can_edit %}disabled{% endif %}>1</button>
+                    <button id="coax-2-2" class="btn btn-outline-light coax-btn" onclick="setCoax(2,'2')" {% if not can_edit %}disabled{% endif %}>2</button>
                   </div>
                 </div>
 
                 <div class="coax-row">
                   <span class="coax-label">S3</span>
                   <div class="btn-group btn-group-sm">
-                    <button
-                      id="coax-3-1"
-                      class="btn btn-outline-light coax-btn"
-                      onclick="setCoax(3,'1')"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
-                      1
-                    </button>
-                    <button
-                      id="coax-3-2"
-                      class="btn btn-outline-light coax-btn"
-                      onclick="setCoax(3,'2')"
-                      {% if not can_edit %}disabled{% endif %}
-                    >
-                      2
-                    </button>
+                    <button id="coax-3-1" class="btn btn-outline-light coax-btn" onclick="setCoax(3,'1')" {% if not can_edit %}disabled{% endif %}>1</button>
+                    <button id="coax-3-2" class="btn btn-outline-light coax-btn" onclick="setCoax(3,'2')" {% if not can_edit %}disabled{% endif %}>2</button>
                   </div>
                 </div>
               </div>
@@ -431,62 +245,84 @@
         </div>
 
       </div>
+    </section>
 
-    <!-- NEW ROW: Moon distance measurement & RF mode card -->
-    <div class="row g-3 mt-2">
-      <div class="col-xl-6 col-lg-8">
-        <div class="glass-card h-100">
-          <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
-            <span class="fw-semibold">Moon Distance Measurement</span>
-            <span class="badge bg-secondary-subtle text-secondary-emphasis small">
-              Requires tracking &amp; lock
-            </span>
-          </div>
-          <div class="card-body d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
-            <div class="text-start">
-              <p class="mb-1 small text-muted">
-                Controls the RF path and starts a transmit/receive sequence to measure the distance to the Moon.
-              </p>
-              <p class="mb-0 small text-muted">
-                TX/RX toggle switches all three coax relays between TX and RX presets.<br>
-                Measurement is only enabled when the rotor is connected, tracking, and locked on the Moon.
-              </p>
+    <!-- Console + Measurement row -->
+    <section class="mb-4">
+      <div class="row g-3">
+
+        <!-- Console (LEFT) -->
+        <div class="col-xl-6 col-lg-6">
+          <div class="glass-card h-100 d-flex flex-column">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">Console</span>
+              <button id="consoleClearBtn" type="button" class="btn btn-outline-light btn-sm">
+                Clear
+              </button>
             </div>
-            <div class="text-end d-flex flex-column gap-2 align-items-end">
-              <button
-                id="coaxModeBtn"
-                type="button"
-                class="btn btn-outline-warning btn-sm"
-                {% if not can_edit %}disabled{% endif %}
-              >
-                Toggle TX / RX
-              </button>
 
-              <button
-                id="measBtn"
-                type="button"
-                class="btn btn-outline-light btn-sm"
-                {% if not can_edit %}disabled{% endif %}
-              >
-                Start measurement
-              </button>
+            <div class="card-body d-flex flex-column">
+              <pre id="console" class="app-console flex-grow-1 mb-0">—</pre>
+              <small class="text-muted d-block mt-2">
+                Live tracker, coax and measurement output.
+              </small>
             </div>
           </div>
         </div>
+
+        <!-- Moon Distance Measurement (RIGHT) -->
+        <div class="col-xl-6 col-lg-6">
+          <div class="glass-card h-100">
+            <div class="card-header border-0 py-2 px-3 d-flex justify-content-between align-items-center">
+              <span class="fw-semibold">Moon Distance Measurement</span>
+              <span class="badge bg-secondary-subtle text-secondary-emphasis small">
+                Tracking required
+              </span>
+            </div>
+
+            <div class="card-body d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+              <div class="text-start">
+                <p class="mb-1 small text-muted">
+                  Starts a transmit/receive sequence and controls the RF path.
+                </p>
+                <p class="mb-0 small text-muted">
+                  TX/RX toggle switches all three coax relays between presets.
+                </p>
+              </div>
+
+              <div class="text-end d-flex flex-column gap-2 align-items-end">
+                <button
+                  id="coaxModeBtn"
+                  type="button"
+                  class="btn btn-outline-warning btn-sm"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  Toggle TX / RX
+                </button>
+
+                <button
+                  id="measBtn"
+                  type="button"
+                  class="btn btn-outline-light btn-sm"
+                  {% if not can_edit %}disabled{% endif %}
+                >
+                  Start measurement
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
-    </div>
-
-
     </section>
 
   </div>
 
-  <!-- Status bar (sticky bottom) -->
+  <!-- Status bar -->
   <div id="status-bar" class="statusbar">
     {{ state.status }}
   </div>
 
-  <!-- JS bundle -->
   <script src="/static/app.js"></script>
 </body>
 </html>
