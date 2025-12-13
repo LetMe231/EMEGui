@@ -14,10 +14,15 @@ import threading
 import time
 import random
 import webbrowser
-from datetime import datetime, UTC
+from datetime import datetime
+from datetime import timezone
+UTC = timezone.utc
 from functools import wraps
 from typing import Any, Dict, Optional
 from dotenv import load_dotenv
+from Test_CW_gnu import testSpeci
+import signal
+import sys
 
 import serial.tools.list_ports
 from flask import (
@@ -907,24 +912,25 @@ def measurement_start():
     #     return jsonify(success=False, status="Cannot start measurement: Moon not locked"), 400
 
  # --- TEMP: generate a fake measurement so charts have something to show ---
-    ts = datetime.now(UTC).isoformat()
-    fake_distance_km = 384_400 + random.uniform(-1000, 1000)   # around real Moon distance
-    fake_snr_db      = random.uniform(-20, 10)                 # random-ish SNR
-    success          = fake_snr_db > -10
+    
 
-    measurements.append(
-        {
-            "timestamp": ts,
-            "distance_km": round(fake_distance_km, 1),
-            "snr_db": round(fake_snr_db, 1),
-            "success": success,
-        }
-    )
+    if state["coax_mode"] != 'tx':
+        coax_toggle_mode()
+    tb=testSpeci()
+    # def sig_handler(sig=None, frame=None):
+    #     tb.stop()
+    #     tb.wait()
 
-    # Optional: keep only the last N measurements
-    if len(measurements) > 200:
-        del measurements[:-200]
+    #     sys.exit(0)
 
+    # signal.signal(signal.SIGINT, sig_handler)
+    # signal.signal(signal.SIGTERM, sig_handler)
+
+    tb.start()
+    time.sleep(2.1)
+    coax_toggle_mode()
+    tb.wait()
+    
     return jsonify(
         success=True,
         status="Measurement sequence would start now (dummy data added).",

@@ -528,11 +528,7 @@ async function refreshStatus() {
       const hasLockInfo = typeof data.locked === "boolean";
       const moonLocked  = hasLockInfo ? !!data.locked : true;
 
-      const canMeasure =
-        !!data.connected &&
-        trackingOn &&
-        moonLocked &&
-        window.APP_CAN_EDIT;
+      const canMeasure = 1
 
       measBtn.disabled = !canMeasure;
 
