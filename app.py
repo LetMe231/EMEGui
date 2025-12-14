@@ -983,7 +983,11 @@ def measurement_start():
                 fd_out.close_and_drain(timeout=1.5)
             if fd_err and hasattr(fd_err, "close_and_drain"):
                 fd_err.close_and_drain(timeout=1.5)
-
+            meas_print("Switching coax back to TX preset...")
+            ok, payload = coax_toggle_mode_internal()
+            if not ok:
+                raise RuntimeError(payload.get("status", "Coax toggle failed"))
+            meas_print("Coax switched to TX.")
             meas_print("=== Measurement finished OK ===")
 
         except Exception as e:

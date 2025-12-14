@@ -128,8 +128,37 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import numpy as np
+    import matplotlib.pyplot as plt
 
+    # Parameters (same T as before)
+    T = 2.304   # seconds (pulse width)
+    A = 1.0     # amplitude of the square pulse
+
+    # Angular frequency axis (rad/s) — choose a range that shows main lobe clearly
+    w = np.linspace(-80, 80, 5000)
+
+    # Fourier transform of a time-centered rectangular pulse of height A and width T:
+    # F(jw) = ∫_{-T/2}^{T/2} A * e^{-j w t} dt = A * 2 * sin(wT/2) / w
+    # with the limit at w=0 being A*T.
+    F = np.empty_like(w, dtype=float)
+    eps = 1e-15
+    mask = np.abs(w) < eps
+    F[mask] = A * T
+    F[~mask] = A * (2.0 * np.sin(w[~mask] * T / 2.0) / w[~mask])
+
+    # Plot (magnitude; here it's real and even, so abs is fine)
+    plt.figure(figsize=(10, 3))
+    plt.plot(w, F)
+    plt.xlabel(r"$\omega$ in rad/s")
+    plt.ylabel("Amplitude")
+    plt.title(r"$S(j\omega)$")
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+
+    # Save as PDF (no display)
+    plt.savefig("Fjw_T_2p304s.pdf")
+    plt.close()
 
 
 

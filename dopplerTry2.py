@@ -15,7 +15,7 @@ FREQ_HZ = 1296e6
 # Day to simulate (UTC)
 YEAR  = 2025
 MONTH = 12
-DAY   = 13
+DAY   = 14
 now = datetime.now(timezone.utc)
 YEAR    = now.year
 MONTH   = now.month

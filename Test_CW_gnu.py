@@ -43,7 +43,7 @@ class testSpeci(gr.top_block):
         self.nsamps = nsamps = 460800
         self.length = length = 2.304
         self.gain_tx = gain_tx = 60
-        self.gain_rx = gain_rx = 70
+        self.gain_rx = gain_rx = 80
         self.delay = delay = round(2.3*samp_rate)
         self.center_freq = center_freq = 1296e6
         self.amplitude = amplitude = 0.25
@@ -95,7 +95,7 @@ class testSpeci(gr.top_block):
                 samp_rate,
                 10000,
                 1000,
-                window.WIN_RECTANGULAR,
+                window.WIN_HAMMING,
                 6.76))
         self.blocks_head_0 = blocks.head(gr.sizeof_gr_complex*1, (5*int(samp_rate)))
         self.blocks_file_source_1 = blocks.file_source(gr.sizeof_gr_complex*1, 'N:\\Empfang_data/Test_CW.bin', False, 0, 0)
@@ -126,7 +126,7 @@ class testSpeci(gr.top_block):
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
         self.set_delay(round(2.3*self.samp_rate))
-        self.low_pass_filter_0.set_taps(firdes.low_pass(1, self.samp_rate, 19500, 1000, window.WIN_RECTANGULAR, 6.76))
+        self.low_pass_filter_0.set_taps(firdes.low_pass(1, self.samp_rate, 10000, 1000, window.WIN_HAMMING, 6.76))
         self.uhd_usrp_sink_1.set_samp_rate(self.samp_rate)
         self.uhd_usrp_source_0.set_samp_rate(self.samp_rate)
         self.uhd_usrp_source_0.set_center_freq(uhd.tune_request(self.center_freq, self.samp_rate), 0)

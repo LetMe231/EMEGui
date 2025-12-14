@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import max_len_seq
 from scipy.signal import find_peaks
 import os
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 MORSE = {
@@ -80,7 +81,7 @@ if __name__ == "__main__":
     closest_time = (moon_closest/c) * 2
     print(closest_time)
 
-    fs = 20000  # samples per second
+    fs = 400000  # samples per second
     wpm = 50  # words per minute
     snr =  80 # target snr
     msg = 'HB9HSR DE HB9HSR AR BT EME RANGE MOON BT RTT MEASUREMENT ONLY BT NO REPLY PSE BT EXPERIMENTAL TX BT TNX BT HB9HSR AR SK' # message
@@ -93,10 +94,18 @@ if __name__ == "__main__":
 
     morseinc, length1 = set_text(50, 'HB9HSR T', fs)
     morse_tx, lengthtx = set_text(50, 'HB9HSR T', 20000)
+    with PdfPages("morse_plot.pdf") as pdf:
+        fig, ax = plt.subplots(figsize=(10, 3))
+        ax.plot(np.arange(morse_tx.size)/20000, (morse_tx+1)/2)
+        ax.set_ylabel('Amplitude')
+        ax.set_xlabel('Time in s')
+        ax.set_title('Morse code for \'HB9HSR T\'')
+        ax.grid(True)
 
-    fig, ax = plt.subplots()
-    ax.plot(np.arange(morse_tx.size)/20000, morse_tx)
-    print(morse_tx.size)
+        fig.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+    # print(morse_tx.size)
     # plt.show()
 
     # spülung = np.zeros([600000])
@@ -112,13 +121,13 @@ if __name__ == "__main__":
 
     save_path_tx = r'N:\Empfang_data\erste_Versuch_tx.bin'  
     os.makedirs(os.path.dirname(save_path_tx), exist_ok=True)
-    (morse_tx).astype('<f4').ravel().tofile(save_path_tx)
+    (morse_tx).astype('<c8').ravel().tofile(save_path_tx)
     print('Saved to:', save_path_tx)
     # print(len(morseinc))
     
     save_path = r'C:\Users\yves.looser\OneDrive - OST\Dokumente/binforMorse.bin'  
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    ((morseinc+1)/2).astype('<f4').ravel().tofile(save_path)
+    ((morseinc)).astype('<c8').ravel().tofile(save_path)
     print('Saved to:', save_path)
     print(len(morseinc))
     
