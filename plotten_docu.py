@@ -2,6 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from numpy.fft import fft, ifft
 
 
 def mainstep():
@@ -129,36 +130,64 @@ def main():
 
 if __name__ == "__main__":
     import numpy as np
-    import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
-    # Parameters (same T as before)
-    T = 2.304   # seconds (pulse width)
-    A = 1.0     # amplitude of the square pulse
+# --- Specs ---
+T = 1/12500          # pulse length [s]
+A = 1.0              # amplitude
+duty = 0.5           # 50/50 high/low
 
-    # Angular frequency axis (rad/s) — choose a range that shows main lobe clearly
-    w = np.linspace(-80, 80, 5000)
+# One period so it's exactly 50/50
+P = T / duty         # period [s] -> for duty=0.5: P = 2T
+fs = 4e5          # sample rate [Hz]
+dt = 1/fs
 
-    # Fourier transform of a time-centered rectangular pulse of height A and width T:
-    # F(jw) = ∫_{-T/2}^{T/2} A * e^{-j w t} dt = A * 2 * sin(wT/2) / w
-    # with the limit at w=0 being A*T.
-    F = np.empty_like(w, dtype=float)
-    eps = 1e-15
-    mask = np.abs(w) < eps
-    F[mask] = A * T
-    F[~mask] = A * (2.0 * np.sin(w[~mask] * T / 2.0) / w[~mask])
+# Time vector centered at 0 (exactly one period)
+t = np.arange(-P/2, P/2, dt)
 
-    # Plot (magnitude; here it's real and even, so abs is fine)
-    plt.figure(figsize=(10, 3))
-    plt.plot(w, F)
-    plt.xlabel(r"$\omega$ in rad/s")
-    plt.ylabel("Amplitude")
-    plt.title(r"$S(j\omega)$")
-    plt.grid(True, linestyle="--", alpha=0.4)
-    plt.tight_layout()
+# Rectangular pulse centered at 0 with width T
+x = np.where(np.abs(t) < T/2, A, 0.0)
+print(np.mean(x))
 
-    # Save as PDF (no display)
-    plt.savefig("Fjw_T_2p304s.pdf")
-    plt.close()
+# --- Autokorrelation r_xx via FFT (linear, full) ---
+N = len(x)
+L = 2 * N - 1                          # full length
+nfft = 1 << int(np.ceil(np.log2(L)))   # next power of 2 >= L
+
+X = np.fft.fft(x)
+r_circ = np.fft.ifft(X * np.conj(X))   # circular autocorrelation
+r_lin = np.real(r_circ[:L])            # take linear part (still needs reordering)
+print(len(r_circ))
+# Reorder to match "full" correlation lags: -(N-1) ... +(N-1)
+rxx = np.fft.fftshift(np.real(r_circ))
+
+lags = np.arange(N)-N/2
+tau = lags / fs                        # lag axis in seconds
+
+# --- Save plots to PDF ---
+with PdfPages("rect_corr_zuz.pdf") as pdf:
+    # 1) Signal plot
+    fig, ax = plt.subplots(figsize=(10, 3))
+    ax.plot(t * 1e6, x)
+    ax.set_title("Rectangular pulse")
+    ax.set_xlabel("Time in μs")
+    ax.set_ylabel("Amplitude")
+    ax.grid(True)
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
+
+    # 2) Autokorrelation plot
+    fig, ax = plt.subplots(figsize=(10, 3))
+    ax.plot(tau * 1e6, rxx)
+    ax.set_title("Autocorrelation r_xx(τ)")
+    ax.set_xlabel("Time in μs")
+    ax.set_ylabel("Amplitude")
+    ax.grid(True)
+    fig.tight_layout()
+    pdf.savefig(fig)
+    plt.close(fig)
 
 
 

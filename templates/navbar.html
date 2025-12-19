@@ -41,20 +41,71 @@
           </li>
         </ul>
 
-        <!-- Right: auth -->
-        <div class="d-flex align-items-center gap-2">
-          {% if can_edit %}
-            <span class="text-success small me-2">Control unlocked</span>
-            <form action="{{ url_for('logout') }}" method="post" class="m-0">
-              <button type="submit" class="btn btn-outline-light btn-sm">
-                Logout
-              </button>
-            </form>
-          {% else %}
-            <a href="{{ url_for('control') }}" class="btn btn-outline-success btn-sm">
-              Control login
-            </a>
-          {% endif %}
+        <!-- Right: connections + auth -->
+        <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end">
+
+          <!-- Connections status pill -->
+          <span class="connection-pill">
+            <span class="connection-dot {% if not state.connected %}offline{% endif %}" id="conn-dot"></span>
+            <span class="small" id="conn-label">
+              {{ "Connected" if state.connected else "Not connected" }}
+            </span>
+          </span>
+
+          <!-- MD-01 connect -->
+          <form id="viewConnectForm" class="d-flex align-items-center gap-2 m-0">
+            {% set preferred = "COM5" %}
+            <select name="port" class="form-select form-select-sm" style="min-width: 120px;">
+              {% if preferred in ports %}
+                <option value="{{ preferred }}" {% if state.port == preferred or not state.port %}selected{% endif %}>{{ preferred }}</option>
+              {% endif %}
+              {% for p in ports %}
+                {% if p != preferred %}
+                  <option value="{{ p }}" {% if state.port == p %}selected{% endif %}>{{ p }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+
+            <button id="viewMdToggleBtn" type="submit" class="btn btn-outline-success btn-sm">
+              Connect MD-01
+            </button>
+          </form>
+
+          <!-- Pico connect -->
+          <form id="coaxConnectForm" class="d-flex align-items-center gap-2 m-0">
+            {% set preferred_sw = "COM7" %}
+            <select name="port" class="form-select form-select-sm" style="min-width: 120px;">
+              {% if preferred_sw in ports %}
+                <option value="{{ preferred_sw }}" {% if state.switch_port == preferred_sw or not state.switch_port %}selected{% endif %}>{{ preferred_sw }}</option>
+              {% endif %}
+              {% for p in ports %}
+                {% if p != preferred_sw %}
+                  <option value="{{ p }}" {% if state.switch_port == p %}selected{% endif %}>{{ p }}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+
+            <button id="viewPicoToggleBtn" type="submit" class="btn btn-outline-info btn-sm">
+              Connect Pico
+            </button>
+          </form>
+
+          <!-- Auth -->
+          <div class="d-flex align-items-center gap-2">
+            {% if can_edit %}
+              <span class="text-success small me-1">Control unlocked</span>
+              <form action="{{ url_for('logout') }}" method="post" class="m-0">
+                <button type="submit" class="btn btn-outline-light btn-sm">
+                  Logout
+                </button>
+              </form>
+            {% else %}
+              <a href="{{ url_for('control') }}" class="btn btn-outline-success btn-sm">
+                Control login
+              </a>
+            {% endif %}
+          </div>
+          </small>
         </div>
       </div>
     </div>

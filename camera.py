@@ -26,7 +26,7 @@ class CameraStream:
     def start(self):
         if self.running:
             return
-        self.cap = cv2.VideoCapture(self.src)
+        self.cap = cv2.VideoCapture(self.src, cv2.CAP_FFMPEG)
         if not self.cap.isOpened():
             self.last_error = f"Could not open source: {self.src}"
             raise RuntimeError(self.last_error)

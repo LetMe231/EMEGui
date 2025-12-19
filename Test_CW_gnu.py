@@ -42,7 +42,7 @@ class testSpeci(gr.top_block):
         self.t_tx = t_tx = t0 + guard
         self.nsamps = nsamps = 460800
         self.length = length = 2.304
-        self.gain_tx = gain_tx = 60
+        self.gain_tx = gain_tx = 67
         self.gain_rx = gain_rx = 80
         self.delay = delay = round(2.3*samp_rate)
         self.center_freq = center_freq = 1296e6
@@ -97,8 +97,8 @@ class testSpeci(gr.top_block):
                 1000,
                 window.WIN_HAMMING,
                 6.76))
-        self.blocks_head_0 = blocks.head(gr.sizeof_gr_complex*1, (5*int(samp_rate)))
-        self.blocks_file_source_1 = blocks.file_source(gr.sizeof_gr_complex*1, 'N:\\Empfang_data/Test_CW.bin', False, 0, 0)
+        self.blocks_head_0 = blocks.head(gr.sizeof_gr_complex*1, (6*int(samp_rate)))
+        self.blocks_file_source_1 = blocks.file_source(gr.sizeof_gr_complex*1, 'N:\\Empfang_data/binforMorse.bin', False, 0, 0)
         self.blocks_file_source_1.set_begin_tag(pmt.PMT_NIL)
         self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_gr_complex*1, f'N:\\Empfang_data/rx_Versuch_{datetime.now().strftime("%H%M%S")}_CW.bin', False)
         self.blocks_file_sink_0.set_unbuffered(False)

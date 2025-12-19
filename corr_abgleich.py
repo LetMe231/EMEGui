@@ -3,6 +3,8 @@ from numpy.fft import fft, ifft
 import matplotlib.pyplot as plt
 # from Doppler import doppler_fitting
 from dopplerTry2 import doppler_change_at_utc
+from matplotlib.backends.backend_pdf import PdfPages
+
 
 def read_files(tx_name = '*.bin', rx_name = '*.bin'):
     with open(f'N:\Empfang_data\{tx_name}', mode='rb') as file:
@@ -18,16 +20,21 @@ def calc_distance(tx, rx, fs=20000):
 
     t_tx = np.arange(tx.size)/fs
     t_rx = np.arange(rx.size)/fs
-    
+
     rx_fft = fft(rx)
-    tx_fft = fft(tx, n=len(rx)).conj()
+    tx_fft = np.conj(fft(tx, n=len(rx)))
     xcorr = np.abs(ifft(rx_fft*tx_fft))
+
+    # fig, ax = plt.subplots()
+    # ax.plot(tx)
+    # ax.plot(rx)
+    
 
     start_samp = round(2.42*fs)
     rx_start = rx[start_samp:]
     t_rx_start = np.arange(rx_start.size)/fs
     rx_start_fft = fft(rx_start)
-    tx_start_fft = fft(tx, n=len(rx_start)).conj()
+    tx_start_fft = np.conj(fft(tx, n=len(rx_start)))
     start_corr = np.abs(ifft(rx_start_fft*tx_start_fft))
 
     fig ,ax = plt.subplots(3,2)
@@ -35,18 +42,23 @@ def calc_distance(tx, rx, fs=20000):
     ax[1,0].plot(t_rx_start, rx_start)
     ax[2,0].plot(t_rx_start, start_corr)
 
-    ax[0,1].plot(t_tx, tx)
-    ax[1,1].plot(t_rx, rx)
+    ax[0,1].plot(t_tx, np.real(tx))
+    ax[0,1].plot(t_tx, np.imag(tx))
+    ax[1,1].plot(t_rx, np.real(rx))
+    ax[1,1].plot(t_rx, np.imag(rx))
+    ax[1,1].plot(t_rx, np.real(rx)+np.imag(rx))
     ax[2,1].plot(t_rx, xcorr)
 
     relevant = round(2.42*fs)
-    peak_rx_start = t_rx_start[np.argmax(start_corr)]+t_rx_start[relevant]
+    relevantspan = round(0.28*fs)
+
+    peak_rx_start = t_rx_start[np.argmax(start_corr[:relevantspan])]+t_rx_start[relevant]
     peak_rx_time = t_rx[np.argmax(xcorr)]
     TOF = peak_rx_start - peak_rx_time
     print(peak_rx_start) # Peak tx signal beginn
     print(peak_rx_time) # Peak rx signal is back
     print(TOF) #TOF
-    return ((TOF)*c)/1000
+    return ((TOF/2)*c)/1000
 
 if __name__ == "__main__": 
 
@@ -56,7 +68,7 @@ if __name__ == "__main__":
     Nchain = 80
     c = 299792458 #m/s
     
-    tx, rx = read_files('erste_Versuch_tx.bin', 'rx_abgleich.bin')
+    # tx, rx = read_files('erste_Versuch_tx.bin', 'rx_abgleich.bin')
 
     # tx, rx_dopp = read_files('erste_Versuch_tx.bin', 'rx_abgleich_dopp.bin')
     
@@ -64,18 +76,26 @@ if __name__ == "__main__":
 
     # print(calc_distance(tx, rx_dopp, 20000))
     # print(calc_distance(tx, doppler_fitting(rx_dopp, -500, 20000), 20000))
-    tx, rx_s_CW = read_files('Test_CW.bin', 'rx_Versuch_152118_CW.bin')
-    # print(calc_distance(tx, rx_s_CW, 20000))
-    start = 2.1
+    tx, rx_s_CW = read_files('binforMorse.bin', 'rx_Versuch_110101_CW.bin')
+    tx_true, rx_erste = read_files('erste_Versuch_tx.bin', 'erste_versuch_rx.bin')
     l = 2.304
+
+    t = np.arange(len(rx_s_CW))/fs
+
+    fit = np.exp(1j*(doppler_change_at_utc(11, 1, l)[0]*t**2)/2)
+    print(calc_distance(tx_true, rx_s_CW*fit, 20000))
+
+
+    start = 2.4
+    
     t_rx_CW = np.arange(rx_s_CW.size)/fs
-    t_tx = np.arange(tx.size)/fs
+    t_tx = np.arange(tx_true.size)/fs
 
     fig, ax = plt.subplots(3)
-    # ax[0].plot(t_tx, np.real(tx))
-    # ax[0].plot(t_tx, np.imag(tx))
-    ax[0].plot(t_rx_CW, (np.real(rx_s_CW)))
-    ax[0].plot(t_rx_CW, (np.imag(rx_s_CW)))
+    ax[0].plot(t_tx, np.real(tx_true))
+    ax[0].plot(t_tx, np.imag(tx_true))
+    # ax[0].plot(t_rx_CW, (np.real(rx_s_CW)))
+    # ax[0].plot(t_rx_CW, (np.imag(rx_s_CW)))
 
     
     start_s = round(start*fs)
@@ -85,7 +105,7 @@ if __name__ == "__main__":
 
     t = np.arange(len(rx_s_CW))/fs
 
-    # fit = np.exp(1j*(doppler_change_at_utc(11, 12, l)[0]*t**2)/2)
+    # fit = np.exp(1j*(doppler_change_at_utc(8, 23, l)[0]*t**2)/2)
 
     # for i in np.arange(40):
     # fit = np.exp(1j*((-0.2+i*0.01)*t**2)/2)
@@ -97,12 +117,24 @@ if __name__ == "__main__":
     rx_fft_CW = 10*np.log(np.abs(fft(rx_s_CW*window)))
     rx_fft_CW = np.fft.fftshift(rx_fft_CW)
 
-    # t_rx_CW = np.arange(rx_s_CW.size)/fs
+    t_rx_CW = np.arange(rx_s_CW.size)/fs
         
     freqs = np.fft.fftfreq(len(rx_s_CW), d=(1/fs))
     freqs = np.fft.fftshift(freqs)
 
     ax[1].plot(t_rx_CW, (rx_s_CW))
+
+    # with PdfPages("fft_rx.pdf") as pdf:
+    #     fig, ax = plt.subplots(figsize=(10, 3))
+    #     ax.plot(freqs, rx_fft_CW)
+    #     ax.set_ylabel(r"$R(j\omega)$")
+    #     ax.set_xlabel('Frequency in Hz')
+    #     ax.set_title('FFT of received signal r(t)')
+    #     ax.grid(True)
+
+    #     fig.tight_layout()
+    #     pdf.savefig(fig)
+    #     plt.close(fig)
     ax[2].plot(freqs, rx_fft_CW)
         
     plt.show()

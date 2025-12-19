@@ -1,10 +1,12 @@
 """
 Main Flask application for MD-01 / EME GUI.
 
+Features
 - Controls the MD-01 antenna controller (via SerialAntenna)
 - Tracks the Moon and slews the antenna
 - Streams an RTSP camera as MJPEG
 - Controls a Raspberry Pi Pico-based coax switch
+- Runs a GNU Radio measurement flowgraph and streams logs via SSE
 """
 
 from __future__ import annotations
@@ -12,72 +14,77 @@ from __future__ import annotations
 import os
 import threading
 import time
-import random
 import webbrowser
-from datetime import datetime
-from datetime import timezone
-UTC = timezone.utc
-from functools import wraps
-from typing import Any, Dict, Optional
-from dotenv import load_dotenv
-from Test_CW_gnu import testSpeci
-import signal
-import sys
 from collections import deque
-from queue import Queue, Empty
+from datetime import datetime, timezone
+from functools import wraps
+from queue import Empty, Queue
+from typing import Any, Dict, Optional
 
+import logging
+import serial  # pyserial
 import serial.tools.list_ports
+from dotenv import load_dotenv
 from flask import (
     Flask,
     Response,
     jsonify,
+    redirect,
     render_template,
     request,
-    Response, 
-    session, 
-    redirect, 
-    url_for
+    session,
+    url_for,
 )
 
+import CalcMoonPos
 from camera import CameraStream, mjpeg_generator
 from serialComm import SerialAntenna
 from serialSwitch import SerialSwitch
-import CalcMoonPos
-import logging
+from Test_CW_gnu import testSpeci
 
-# Silence Flask/Werkzeug request logs (GET/POST lines), keep errors
+UTC = timezone.utc
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+
+# Silence Flask/Werkzeug request logs (GET/POST lines), keep errors.
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
-measurements = []
 # -----------------------------------------------------------------------------
-# App / global objects
+# App setup / configuration
 # -----------------------------------------------------------------------------
 
 app = Flask(__name__)
-
 load_dotenv()
 
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-change-me")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 
-
 CAMERA_SOURCE = os.getenv("CAMERA_SOURCE")
-# if not CAMERA_SOURCE:
-#     raise RuntimeError("CAMERA_SOURCE environment variable not set")
-
 camera = CameraStream(src=CAMERA_SOURCE, jpeg_quality=80)
 
-# Multithreading
+# -----------------------------------------------------------------------------
+# Global shared objects / locks
+# -----------------------------------------------------------------------------
+
+measurements = []
+
 serial_lock = threading.Lock()
 camera_lock = threading.Lock()
+
 tracking_thread: Optional[threading.Thread] = None
 tracking_stop = threading.Event()
 
-# Pico switch auto-detection
-SWITCH_PORT_ENV = "COM14"     # optional override, e.g. "COM5"
-SWITCH_PORT_DEFAULT = "COM14"            # optional hard-coded fallback; "" = disabled
+# Pico coax switch wrapper instance (created after probe)
 switch: Optional[SerialSwitch] = None
 
+# MD-01 antenna wrapper instance
+ant: Optional[SerialAntenna] = None
+
+# -----------------------------------------------------------------------------
+# Constants: antenna / tracking / safety
+# -----------------------------------------------------------------------------
 
 # Parking position for the antenna
 PARKAZ = 40
@@ -96,17 +103,22 @@ CABLE_MARGIN = 30           # safety margin before wrap
 
 # Controller azimuth encoding parameters
 AZ_OFFSET_DEG = 0           # offset if your mount is shifted
-AZ_FLIP_180 = False         # quick flip by 180° if reference is inverted
+AZ_FLIP_180 = True          # quick flip by 180° if reference is inverted
 
-# --- Measurement live console (SSE) ---
+# -----------------------------------------------------------------------------
+# Measurement live console (SSE)
+# -----------------------------------------------------------------------------
+
 MEAS_LOG_MAX = 3000
-meas_log = deque(maxlen=MEAS_LOG_MAX)     # keeps recent lines
-meas_stream = Queue()                     # pushes lines to connected browsers
+meas_log = deque(maxlen=MEAS_LOG_MAX)  # keeps recent lines
+meas_stream = Queue()                  # pushes lines to connected browsers
 meas_lock = threading.Lock()
 meas_running = False
 
+# -----------------------------------------------------------------------------
+# Shared state exposed through /status
+# -----------------------------------------------------------------------------
 
-# Shared state dictionary exposed through /status
 state: Dict[str, Any] = {
     "connected": False,
     "status": "Not connected",
@@ -121,61 +133,25 @@ state: Dict[str, Any] = {
     "port": None,
     "switch_port": None,
     "switch_connected": False,
-    "switches": {
-        "S1": 0,
-        "S2": 0,
-        "S3": 0,
-    },
+    "switches": {"S1": 0, "S2": 0, "S3": 0},
     "moon_next_above_15": None,
     "moon_next_below_15": None,
 }
 
-
-ant: Optional[SerialAntenna] = None
+# Continuous moon azimuth tracking state
 moon_cont_az: Optional[float] = None
 last_moon_az: Optional[float] = None
 
-
-def stop_tracking_worker() -> None:
-    """
-    Stop the background tracking thread (if running) and
-    mark state['tracking'] = False.
-    """
-    global tracking_thread, tracking_stop, ant
-
-    tracking_stop.set()
-
-    if tracking_thread and tracking_thread.is_alive():
-        try:
-            tracking_thread.join(timeout=1)
-        except Exception:
-            pass
-
-    tracking_thread = None
-    state["tracking"] = False
-
-def meas_print(line: str) -> None:
-    """Append a line to measurement log + push to SSE listeners."""
-    ts = datetime.now().strftime("%H:%M:%S")
-    msg = f"[{ts}] {line}".rstrip()
-
-    with meas_lock:
-        meas_log.append(msg)
-
-    try:
-        meas_stream.put_nowait(msg)
-    except Exception:
-        pass
-
 # -----------------------------------------------------------------------------
-# Status manager / decorator
+# Small helpers: status, auth, SSE printing
 # -----------------------------------------------------------------------------
 
 def set_status(level: str, message: str) -> None:
     """
     Update the global status.
 
-    level: 'info' | 'success' | 'warning' | 'error' | 'busy'
+    level: 'info' | 'success' | 'warning' | 'error' | 'busy' (and other strings
+    may be used by callers; UI decides how to render them).
     """
     state["status_level"] = level
     state["status"] = message
@@ -197,8 +173,8 @@ def api_action(fn):
         except Exception as exc:  # noqa: BLE001
             set_status("error", f"{type(exc).__name__}: {exc}")
             return jsonify(success=False, status=state["status"]), 500
-
     return wrapper
+
 
 def is_authenticated() -> bool:
     """Return True if the current session is logged in for control."""
@@ -218,8 +194,8 @@ def require_auth(fn):
             set_status("error", msg)
             return jsonify(success=False, status=msg), 403
         return fn(*args, **kwargs)
-
     return wrapper
+
 
 @app.context_processor
 def inject_auth_flags():
@@ -230,6 +206,39 @@ def inject_auth_flags():
     - True: user logged in and allowed to change things
     """
     return {"can_edit": is_authenticated()}
+
+
+def meas_print(line: str) -> None:
+    """Append a line to measurement log + push to SSE listeners."""
+    ts = datetime.now().strftime("%H:%M:%S")
+    msg = f"[{ts}] {line}".rstrip()
+
+    with meas_lock:
+        meas_log.append(msg)
+
+    try:
+        meas_stream.put_nowait(msg)
+    except Exception:
+        pass
+
+
+def stop_tracking_worker() -> None:
+    """
+    Stop the background tracking thread (if running) and
+    mark state['tracking'] = False.
+    """
+    global tracking_thread
+
+    tracking_stop.set()
+
+    if tracking_thread and tracking_thread.is_alive():
+        try:
+            tracking_thread.join(timeout=1)
+        except Exception:
+            pass
+
+    tracking_thread = None
+    state["tracking"] = False
 
 
 # -----------------------------------------------------------------------------
@@ -255,6 +264,21 @@ def app_to_ctrl_continuous(app_deg: float) -> float:
     if AZ_FLIP_180:
         val -= 180
     return val
+
+def ctrl_to_app_continuous(ctrl_deg: float) -> float:
+    """
+    Convert controller azimuth to app/sky azimuth (inverse of app_to_ctrl_continuous).
+    """
+    val = ctrl_deg
+    if AZ_FLIP_180:
+        val += 180
+    val += AZ_OFFSET_DEG
+    return val
+
+
+def ctrl_to_app_norm(ctrl_deg: float) -> float:
+    """Controller azimuth -> app/sky azimuth, normalized to [0, 360)."""
+    return norm360(ctrl_to_app_continuous(ctrl_deg))
 
 
 def encode_ctrl_az_from_continuous(app_cont_deg: float) -> float:
@@ -360,18 +384,17 @@ def wait_until_position(
             return False
 
         with serial_lock:
-            try:
-                az, el = ant.read_md01_position()
-            except Exception:
-                time.sleep(0.5)
-                continue
+            az_ctrl, el = ant.read_md01_position()
 
-        state["az"] = round(az, 1)
-        state["az_norm"] = round(state["az"] % 360, 1)
+        az_app = ctrl_to_app_continuous(az_ctrl)
+
+        state["az"] = round(az_app, 1)
+        state["az_norm"] = round(norm360(az_app), 1)
         state["el"] = round(el, 1)
 
-        az_ok = abs(ang_err(target_az % 360, az % 360)) <= POS_TOL
+        az_ok = abs(ang_err(target_az % 360, az_app % 360)) <= POS_TOL
         el_ok = abs(target_el - el) <= POS_TOL
+
         if az_ok and el_ok:
             return True
 
@@ -380,15 +403,11 @@ def wait_until_position(
     return False
 
 
-def wait_for_moon_above(
-    min_el: float = ELEVATION_MIN,
-    poll_s: float = 10,
-) -> bool:
+def wait_for_moon_above(min_el: float = ELEVATION_MIN, poll_s: float = 10) -> bool:
     """
-    Block until Moon's elevation is >= min_el, or tracking_stop is set.
+    Block until Moon elevation is >= min_el, or tracking_stop is set.
 
-    Returns True if Moon reaches the minimum elevation, False if stopped
-    before that happens.
+    Returns True if Moon reaches the minimum elevation, False if stopped first.
     """
     while not tracking_stop.is_set():
         try:
@@ -400,21 +419,18 @@ def wait_for_moon_above(
         except Exception:
             pass
         time.sleep(poll_s)
-
     return False
 
 
 def go_to_parking() -> None:
-    """
-    Command the antenna to park and wait until it reaches the parking position.
-    """
+    """Command the antenna to park and wait until it reaches the parking position."""
     global ant
-
     if ant is None:
         return
 
     with serial_lock:
-        ant.send_rot2_set(ant.ser, PARKAZ, PARKEL)
+        cmd_az = encode_ctrl_az_from_continuous(PARKAZ)
+        ant.send_rot2_set(ant.ser, cmd_az, PARKEL)
 
     set_status("info", f"Parking: Az={PARKAZ}°, El={PARKEL}°")
     reached = wait_until_position(PARKAZ, PARKEL, timeout=SLEW_TIMEOUT)
@@ -435,7 +451,7 @@ def poll_loop() -> None:
 
     - Periodically reads antenna position (if connected)
     - Keeps the global state angles up to date
-    - Continually updates Moon position
+    - Continually updates Moon position and threshold crossing times
     """
     global ant
 
@@ -445,10 +461,14 @@ def poll_loop() -> None:
         if state["connected"] and ant:
             try:
                 with serial_lock:
-                    az, el = ant.read_md01_position()
-                state["az"] = round(az, 1)
-                state["az_norm"] = round(state["az"] % 360, 1)
+                    az_ctrl, el = ant.read_md01_position()
+
+                az_app = ctrl_to_app_continuous(az_ctrl)
+
+                state["az"] = round(az_app, 1)
+                state["az_norm"] = round(norm360(az_app), 1)
                 state["el"] = round(el, 1)
+
                 fail_count = 0
             except Exception as exc:  # noqa: BLE001
                 fail_count += 1
@@ -473,7 +493,6 @@ def poll_loop() -> None:
             state["az_moon"] = round(azm, 1)
             state["el_moon"] = round(elm, 1)
 
-            # Also compute when the Moon will next go above / below 15°
             try:
                 next_up_iso, next_down_iso = CalcMoonPos.get_moon_threshold_times(
                     min_el_deg=ELEVATION_MIN
@@ -485,15 +504,13 @@ def poll_loop() -> None:
                 state["moon_next_below_15"] = None
 
         except Exception:
-            # If even Moon position fails, don't crash the loop
             pass
 
         time.sleep(1)
 
 
-
 # -----------------------------------------------------------------------------
-# Flask routes: main / status
+# Routes: main views / auth / status
 # -----------------------------------------------------------------------------
 
 @app.route("/")
@@ -520,18 +537,16 @@ def control():
 
     if not is_authenticated():
         # Show login form, then come back here
-        return render_template(
-            "login.html",
-            error=None,
-            next=url_for("control"),
-        )
+        return render_template("login.html", error=None, next=url_for("control"))
 
     return render_template("index.html", state=state, ports=ports)
+
 
 @app.route("/status")
 def status():
     """Return the current global state as JSON."""
     return jsonify(state)
+
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -550,7 +565,6 @@ def login():
         return redirect(next_url)
 
     set_status("error", "Invalid password")
-    # Re-render login page with error and same 'next'
     return render_template("login.html", error="Invalid password", next=next_url)
 
 
@@ -562,9 +576,8 @@ def logout():
     return redirect(url_for("index"))
 
 
-
 # -----------------------------------------------------------------------------
-# Connect / disconnect controller
+# Connect / disconnect MD-01 controller
 # -----------------------------------------------------------------------------
 
 @app.route("/connect", methods=["POST"])
@@ -589,13 +602,11 @@ def connect():
             "az": round(az, 1),
             "az_norm": round(az % 360, 1),
             "el": round(el, 1),
-        },
+        }
     )
-    set_status(
-        "success",
-        f"Connected with {port} (Az={az:.1f}°, El={el:.1f}°)",
-    )
+    set_status("success", f"Connected with {port} (Az={az:.1f}°, El={el:.1f}°)")
     return jsonify(success=True, status=state["status"])
+
 
 @app.route("/connect_public", methods=["POST"])
 @api_action
@@ -623,12 +634,9 @@ def connect_public():
             "az": round(az, 1),
             "az_norm": round(az % 360, 1),
             "el": round(el, 1),
-        },
+        }
     )
-    set_status(
-        "success",
-        f"[view] Connected with {port} (Az={az:.1f}°, El={el:.1f}°)",
-    )
+    set_status("success", f"[view] Connected with {port} (Az={az:.1f}°, El={el:.1f}°)")
     return jsonify(success=True, status=state["status"])
 
 
@@ -637,7 +645,7 @@ def connect_public():
 @api_action
 def disconnect():
     """Disconnect from the MD-01, park, and stop tracking."""
-    global ant, tracking_thread, tracking_stop
+    global ant, tracking_thread
 
     tracking_stop.set()
 
@@ -646,22 +654,19 @@ def disconnect():
 
     if ant:
         with serial_lock:
-            safe_az = safe_azimuth(PARKAZ, state["az"])
-            ant.send_rot2_set(ant.ser, safe_az, PARKEL)
+            safe_az_app = safe_azimuth(PARKAZ, state["az"])
+            cmd_az_ctrl = encode_ctrl_az_from_continuous(safe_az_app)
+            ant.send_rot2_set(ant.ser, cmd_az_ctrl, PARKEL)
             ant.stopMovement()
+
+
         time.sleep(0.3)
         with serial_lock:
             ant.close()
+
         ant = None
 
-    state.update(
-        {
-            "connected": False,
-            "tracking": False,
-            "az": 0.0,
-            "el": 0.0,
-        },
-    )
+    state.update({"connected": False, "tracking": False, "az": 0.0, "el": 0.0})
     set_status("info", "Not connected")
     return jsonify(success=True, status=state["status"])
 
@@ -676,6 +681,7 @@ def disconnect():
 def set_position():
     """Manually set antenna position (az, el)."""
     global ant
+
     force = request.args.get("force", "0") == "1"
     az_req = float(request.form["az"])
     el_req = float(request.form["el"])
@@ -702,10 +708,7 @@ def set_position():
     delta = signed180(tgt_app - cur_app)
     set_status(
         "success",
-        (
-            f"Set to {tgt_app:.1f}° (Δ={delta:.1f}°) "
-            f"→ cmd {cmd_ctrl_az:.1f}° / {el_req:.1f}°"
-        ),
+        f"Set to {tgt_app:.1f}° (Δ={delta:.1f}°) → cmd {cmd_ctrl_az:.1f}° / {el_req:.1f}°",
     )
     return jsonify(success=True, status=state["status"])
 
@@ -724,7 +727,7 @@ def tracker():
     - Starts background thread when enabling.
     - Stops tracking and motion when disabling.
     """
-    global ant, tracking_thread, tracking_stop, moon_cont_az, last_moon_az
+    global ant, tracking_thread, moon_cont_az, last_moon_az
 
     if not (state["connected"] and ant):
         set_status("error", "Controller not connected!")
@@ -748,16 +751,13 @@ def tracker():
             nonlocal force
             global moon_cont_az, last_moon_az, ant
 
-            # Step 0: park and wait if Moon below horizon (unless forced)
+            # Step 0: park and wait if Moon below minimum elevation (unless forced)
             try:
                 azm, elm = CalcMoonPos.get_moon_position()
                 state["az_moon"] = round(azm, 1)
                 state["el_moon"] = round(elm, 1)
             except Exception:
-                set_status(
-                    "warning",
-                    "Could not compute Moon position; retrying…",
-                )
+                set_status("warning", "Could not compute Moon position; retrying…")
                 time.sleep(2)
 
             if (state.get("el_moon", 0) < ELEVATION_MIN) and not force:
@@ -785,26 +785,14 @@ def tracker():
                 return
 
             with serial_lock:
-                ant.send_rot2_set(ant.ser, desired_az, desired_el)
+                cmd_az = encode_ctrl_az_from_continuous(desired_az)
+                ant.send_rot2_set(ant.ser, cmd_az, desired_el)
 
-            set_status(
-                "busy",
-                (
-                    f"Slewing to Moon: Az={desired_az:.1f}°, "
-                    f"El={desired_el:.1f}°"
-                ),
-            )
+            set_status("busy", f"Slewing to Moon: Az={desired_az:.1f}°, El={desired_el:.1f}°")
 
-            reached = wait_until_position(
-                desired_az,
-                desired_el,
-                timeout=SLEW_TIMEOUT,
-            )
+            reached = wait_until_position(desired_az, desired_el, timeout=SLEW_TIMEOUT)
             if not reached:
-                set_status(
-                    "warning",
-                    "Initial slew timed out; entering tracking anyway",
-                )
+                set_status("warning", "Initial slew timed out; entering tracking anyway")
             else:
                 set_status("success", "On target — starting active tracking")
 
@@ -828,10 +816,7 @@ def tracker():
                     continue
 
                 if last_moon_az is not None:
-                    moon_cont_az = unwrap_azimuth(
-                        state["az_moon"],
-                        last_moon_az,
-                    )
+                    moon_cont_az = unwrap_azimuth(state["az_moon"], last_moon_az)
                 else:
                     moon_cont_az = state["az_moon"]
                 last_moon_az = state["az_moon"]
@@ -844,20 +829,20 @@ def tracker():
 
                 with serial_lock:
                     try:
-                        cur_az, cur_el = ant.read_md01_position()
+                        cur_az_ctrl, cur_el = ant.read_md01_position()
+                        cur_az_app = ctrl_to_app_continuous(cur_az_ctrl)
                     except Exception as exc:  # noqa: BLE001
-                        set_status(
-                            "error",
-                            f"Read error during tracking: {exc}",
-                        )
+                        set_status("error", f"Read error during tracking: {exc}")
                         time.sleep(1)
                         continue
 
-                state["az"] = round(cur_az, 1)
-                state["az_norm"] = round(state["az"] % 360, 1)
+
+                state["az"] = round(cur_az_app, 1)
+                state["az_norm"] = round(norm360(cur_az_app), 1)
                 state["el"] = round(cur_el, 1)
 
-                err_az = ang_err(desired_az % 360, cur_az % 360)
+
+                err_az = ang_err(desired_az % 360, cur_az_app % 360)
                 err_el = desired_el - cur_el
 
                 now = time.time()
@@ -867,20 +852,18 @@ def tracker():
                 ):
                     with serial_lock:
                         try:
-                            ant.send_rot2_set(ant.ser, desired_az, desired_el)
+                            cmd_az = encode_ctrl_az_from_continuous(desired_az)
+                            ant.send_rot2_set(ant.ser, cmd_az, desired_el)
                         except Exception as exc:  # noqa: BLE001
-                            set_status(
-                                "error",
-                                f"Tracking error: {exc}",
-                            )
+                            set_status("error", f"Tracking error: {exc}")
                             time.sleep(1)
                             continue
+
                     last_send = now
                     set_status(
                         "busy",
                         (
-                            f"Tracking: Az→{desired_az:.1f}°, "
-                            f"El→{desired_el:.1f}° "
+                            f"Tracking: Az→{desired_az:.1f}°, El→{desired_el:.1f}° "
                             f"(ΔAz={err_az:.1f}°, ΔEl={err_el:.1f}°)"
                         ),
                     )
@@ -906,8 +889,9 @@ def tracker():
 
 
 # -----------------------------------------------------------------------------
-# Start a measurement
+# Measurement: start + console write + SSE stream
 # -----------------------------------------------------------------------------
+
 @app.post("/measurement/start")
 @require_auth
 @api_action
@@ -936,7 +920,7 @@ def measurement_start():
         fd_err = None
 
         try:
-            # redirect Python logging into meas console (prevents "--- Logging error ---")
+            # Redirect Python logging into meas console (prevents "--- Logging error ---")
             restore_logging = install_meas_logging(meas_print)
 
             # Try to capture GNU Radio / UHD stdout+stderr
@@ -950,15 +934,15 @@ def measurement_start():
                 fd_out = None
                 fd_err = None
                 meas_print(f"Console capture: FD tee FAILED ({type(e).__name__}: {e})")
-                meas_print("Continuing without FD tee (you will still see meas_print + Python logging).")
+                meas_print(
+                    "Continuing without FD tee (you will still see meas_print + Python logging)."
+                )
 
             meas_print(f"Current coax_mode={state.get('coax_mode')!r}")
 
             if state.get("coax_mode") != "tx":
                 meas_print("Switching coax to TX preset...")
-                ok, payload = coax_toggle_mode_internal()
-                if not ok:
-                    raise RuntimeError(payload.get("status", "Coax toggle failed"))
+                set_tx()
                 meas_print("Coax switched to TX.")
 
             meas_print("Starting GNU Radio flowgraph...")
@@ -966,27 +950,24 @@ def measurement_start():
 
             tb.start()
             meas_print("Flowgraph started. Sleeping 2.1s before switching to RX...")
-            time.sleep(2.1)
+            time.sleep(2.4)
 
             meas_print("Switching coax to RX preset...")
-            ok, payload = coax_toggle_mode_internal()
-            if not ok:
-                raise RuntimeError(payload.get("status", "Coax toggle failed"))
+            set_rx()
             meas_print("Coax switched to RX.")
 
             meas_print("Waiting for flowgraph to finish...")
             tb.wait()
             meas_print("Flowgraph finished.")
 
-            # Drain (only if your _FdTee has close_and_drain)
+            # Drain output (only if _FdTee supports close_and_drain)
             if fd_out and hasattr(fd_out, "close_and_drain"):
                 fd_out.close_and_drain(timeout=1.5)
             if fd_err and hasattr(fd_err, "close_and_drain"):
                 fd_err.close_and_drain(timeout=1.5)
+
             meas_print("Switching coax back to TX preset...")
-            ok, payload = coax_toggle_mode_internal()
-            if not ok:
-                raise RuntimeError(payload.get("status", "Coax toggle failed"))
+            set_tx()
             meas_print("Coax switched to TX.")
             meas_print("=== Measurement finished OK ===")
 
@@ -1014,6 +995,7 @@ def measurement_start():
     threading.Thread(target=worker, daemon=True).start()
     return jsonify(success=True, status="Measurement started (live console running).")
 
+
 @app.post("/measurement/console")
 @require_auth
 @api_action
@@ -1024,9 +1006,38 @@ def measurement_console_write():
     meas_print(f">>> {txt}")
     return jsonify(success=True, status="OK")
 
+
+@app.get("/measurement/stream")
+def measurement_stream():
+    """Server-Sent Events stream for the measurement console."""
+    def gen():
+        # Send backlog first
+        with meas_lock:
+            backlog = list(meas_log)
+
+        for line in backlog[-300:]:
+            yield f"data: {line}\n\n"
+
+        # Then live
+        while True:
+            try:
+                line = meas_stream.get(timeout=15)
+                yield f"data: {line}\n\n"
+            except Empty:
+                # Keep connection alive
+                yield "data: \n\n"
+
+    return Response(gen(), mimetype="text/event-stream")
+
+
+# -----------------------------------------------------------------------------
+# Coax switch: internal toggle + connect/disconnect/status + set
+# -----------------------------------------------------------------------------
+
 def coax_toggle_mode_internal():
     """
     Context-free version of coax toggle. Safe to call from background threads.
+
     Returns: (success: bool, payload: dict)
     """
     global switch
@@ -1037,7 +1048,7 @@ def coax_toggle_mode_internal():
         and switch.ser.is_open
         and state.get("switch_connected")
     ):
-        # IMPORTANT: do not call set_status() here if it uses request context
+        # IMPORTANT: do not call set_status() here (thread context / request context)
         state["status"] = "Pico switch not connected"
         return False, {"status": state["status"]}
 
@@ -1048,6 +1059,7 @@ def coax_toggle_mode_internal():
     s2 = switches.get("S2")
     s3 = switches.get("S3")
 
+    # Infer current mode if missing/unknown
     if current_mode not in ("tx", "rx"):
         if s1 == "1" and s2 == "2" and s3 == "2":
             current_mode = "tx"
@@ -1084,7 +1096,10 @@ def coax_toggle_mode_internal():
         "success": True,
         "mode": new_mode,
         "switches": switches,
-        "status": f"Coax relays set to {label} preset (S1={target['S1']}, S2={target['S2']}, S3={target['S3']})",
+        "status": (
+            f"Coax relays set to {label} preset "
+            f"(S1={target['S1']}, S2={target['S2']}, S3={target['S3']})"
+        ),
     }
     return True, payload
 
@@ -1095,161 +1110,78 @@ def coax_toggle_mode_internal():
 def coax_toggle_mode():
     ok, payload = coax_toggle_mode_internal()
     if not ok:
-        # route can still call set_status safely (it has request context)
         set_status("error", payload.get("status", "Pico switch not connected"))
         return jsonify(success=False, status=state.get("status", "Error")), 500
 
+    # NOTE: original code used level="ok" (kept as-is).
     set_status("ok", payload.get("status", "OK"))
     return jsonify(**payload)
 
-
-@app.route("/data")
-def data_page():
-    """
-    Data / analysis page.
-
-    - Umlaufbahn (orbit-style) Moon plot
-    - EME measurement history (distance, SNR, etc.)
-    """
-    ports = [p.device for p in serial.tools.list_ports.comports()]
-    return render_template("data.html", state=state, ports=ports)
-
-
-@app.route("/api/measurements")
-def api_measurements():
-    """
-    Return measurement history for charts.
-    """
-    return jsonify(
-        measurements=measurements,
-        count=len(measurements),
-    )
-
 # -----------------------------------------------------------------------------
-# Stop / park
+# Coax preset helpers: force TX / RX (do NOT toggle)
 # -----------------------------------------------------------------------------
 
-@app.route("/stop", methods=["POST"])
-@require_auth
-@api_action
-def stop():
+def _require_pico_connected() -> None:
+    global switch
+    if not (
+        switch
+        and getattr(switch, "ser", None)
+        and switch.ser.is_open
+        and state.get("switch_connected")
+    ):
+        raise RuntimeError("Pico switch not connected")
+
+def _coax_apply_preset(target: dict[str, str], mode: str) -> dict[str, str]:
     """
-    Immediate stop of movement AND stop tracking thread.
-    Does NOT park – it just freezes everything where it is.
+    Force all three relays to an explicit preset.
+    target example: {"S1":"1","S2":"2","S3":"2"}
+    Returns updated switches dict.
     """
-    global ant
+    global switch
 
-    if not ant:
-        set_status("error", "Controller not connected!")
-        return jsonify(success=False, status=state["status"]), 400
+    _require_pico_connected()
 
-    # First: stop tracking thread so it doesn't keep sending commands
-    stop_tracking_worker()
+    switches = state.get("switches") or {}
+    all_resp = {}
 
-    try:
-        with serial_lock:
-            ant.stopMovement()
-        set_status("info", "Movement & tracking stopped")
-        return jsonify(success=True, status=state["status"])
-    except Exception as exc:  # noqa: BLE001
-        set_status("error", f"Error while stopping: {exc}")
-        return jsonify(success=False, status=state["status"])
+    with serial_lock:
+        for sid in (1, 2, 3):
+            side = target[f"S{sid}"]
+            resp = switch.set(sid, side)
 
+            if isinstance(resp, dict):
+                all_resp.update(resp)
+                sw = resp.get("switches")
+                if isinstance(sw, dict):
+                    switches.update(sw)
 
-@app.route("/park", methods=["POST"])
-@require_auth
-@api_action
-def park():
-    """Send antenna to park position."""
-    global ant
+    # If your pico doesn't echo switches on SET, fall back to a STATUS poll:
+    if not (isinstance(switches, dict) and {"S1", "S2", "S3"} <= set(switches.keys())):
+        st = switch.status_parsed()
+        sw = st.get("switches") or {}
+        if isinstance(sw, dict):
+            switches.update(sw)
 
-    if not ant:
-        set_status("error", "Controller not connected!")
-        return jsonify(success=False, status=state["status"]), 400
+    state["switches"] = switches
+    state["coax_mode"] = mode
+    return switches
 
-    try:
-        with serial_lock:
-            safe_az = safe_azimuth(PARKAZ, state["az"])
-            ant.send_rot2_set(ant.ser, safe_az, PARKEL)
-            ant.stopMovement()
-        set_status("info", "Parkposition set")
-        return jsonify(success=True, status=state["status"])
-    except Exception as exc:  # noqa: BLE001
-        set_status("error", f"Error while parking: {exc}")
-        return jsonify(success=False, status=state["status"])
-
-# console route
-
-@app.get("/measurement/stream")
-def measurement_stream():
-    def gen():
-        # Send backlog first
-        with meas_lock:
-            backlog = list(meas_log)
-
-        for line in backlog[-300:]:
-            yield f"data: {line}\n\n"
-
-        # Then live
-        while True:
-            try:
-                line = meas_stream.get(timeout=15)
-                yield f"data: {line}\n\n"
-            except Empty:
-                # keep connection alive
-                yield "data: \n\n"
-
-    return Response(gen(), mimetype="text/event-stream")
-
-
-# -----------------------------------------------------------------------------
-# Camera routes
-# -----------------------------------------------------------------------------
-
-@app.route("/camera/health")
-def camera_health():
+def set_tx() -> dict[str, str]:
     """
-    Report camera health.
-
-    Also attempts to (re)start the camera if it is not running.
+    Force TX preset: S1=1, S2=2, S3=2
     """
-    ensure_camera_running()
+    sw = _coax_apply_preset({"S1": "1", "S2": "2", "S3": "2"}, mode="tx")
+    set_status("ok", "Coax forced to TX preset (S1=1, S2=2, S3=2)")
+    return sw
 
-    h = camera.get_health()
-    ok = h["running"] and (
-        h["has_frame"] or h["last_frame_age"] is not None
-    )
-    return jsonify(h), (200 if ok else 503)
-
-
-@app.route("/video.mjpg")
-def video_mjpg():
+def set_rx() -> dict[str, str]:
     """
-    MJPEG video stream endpoint.
-
-    Frontend uses this inside an <img>. If unhealthy, returns 503 so that
-    the frontend can show a "No video" overlay.
+    Force RX preset: S1=2, S2=1, S3=1
     """
-    ensure_camera_running()
+    sw = _coax_apply_preset({"S1": "2", "S2": "1", "S3": "1"}, mode="rx")
+    set_status("ok", "Coax forced to RX preset (S1=2, S2=1, S3=1)")
+    return sw
 
-    h = camera.get_health()
-    ok = h["running"] and (
-        h["has_frame"] or h["last_frame_age"] is not None
-    )
-    if not ok:
-        return Response(status=503)
-
-    return Response(
-        mjpeg_generator(camera, fps=25),
-        mimetype="multipart/x-mixed-replace; boundary=frame",
-    )
-
-
-# -----------------------------------------------------------------------------
-# Coax switch helpers / routes
-# -----------------------------------------------------------------------------
-
-import serial  # at top of file, if not already
 
 def probe_pico_port(port: str, timeout: float = 1.0) -> dict:
     """
@@ -1262,7 +1194,6 @@ def probe_pico_port(port: str, timeout: float = 1.0) -> dict:
     """
     ser = None
     try:
-        # Adjust baudrate if your Pico uses something else
         ser = serial.Serial(port, baudrate=115200, timeout=0.3)
 
         # Flush any garbage / boot messages
@@ -1272,7 +1203,6 @@ def probe_pico_port(port: str, timeout: float = 1.0) -> dict:
         except Exception:
             pass
 
-        # Send STATUS
         ser.write(b"STATUS\r\n")
         ser.flush()
 
@@ -1286,7 +1216,7 @@ def probe_pico_port(port: str, timeout: float = 1.0) -> dict:
 
             text = line.decode(errors="ignore").strip().upper()
 
-            # Ignore your "Ready: commands ..." banner etc.
+            # Ignore banners / unrelated output
             if not text.startswith("STATE "):
                 continue
 
@@ -1320,8 +1250,7 @@ def coax_connect():
     """
     Manually connect to the Pico coax switch on the selected serial port.
 
-    - Opens the port with pyserial
-    - Sends STATUS and parses "STATE S1=.. S2=.. S3=.."
+    - Probes the port for Pico firmware (STATUS -> STATE ...)
     - Only on success creates SerialSwitch and marks as connected
     """
     global switch
@@ -1332,17 +1261,14 @@ def coax_connect():
         return jsonify(success=False, status=state["status"]), 400
 
     try:
-        # 1) HARD PROBE: must look like our Pico
         switches_dict = probe_pico_port(port)
 
-        # 2) Now that we know it is our firmware, create the high-level wrapper
         with serial_lock:
             sw = SerialSwitch(port)
         switch = sw
 
         state["switch_port"] = port
         state["switch_connected"] = True
-        # Initialize global switches with what we saw in the first STATUS
         state["switches"] = switches_dict
 
         set_status("success", f"Pico switch connected on {port}")
@@ -1355,14 +1281,11 @@ def coax_connect():
         set_status("error", f"Failed to connect Pico switch on {port}: {exc}")
         return jsonify(success=False, status=state["status"]), 500
 
+
 @app.route("/coax/connect_public", methods=["POST"])
 @api_action
 def coax_connect_public():
-    """
-    Public connect for the Pico coax switch (no login).
-
-    Used by the data-only view page.
-    """
+    """Public connect for the Pico coax switch (no login)."""
     global switch
 
     port = request.form.get("port")
@@ -1371,10 +1294,8 @@ def coax_connect_public():
         return jsonify(success=False, status=state["status"]), 400
 
     try:
-        # 1) HARD PROBE: must look like our Pico
         switches_dict = probe_pico_port(port)
 
-        # 2) Now that we know it is our firmware, create the high-level wrapper
         with serial_lock:
             sw = SerialSwitch(port)
         switch = sw
@@ -1398,16 +1319,13 @@ def coax_connect_public():
 @require_auth
 @api_action
 def coax_disconnect():
-    """
-    Disconnect from the Pico coax switch.
-    """
+    """Disconnect from the Pico coax switch."""
     global switch
 
     if switch is not None:
         try:
             with serial_lock:
                 if getattr(switch, "ser", None):
-                # close if possible
                     switch.ser.close()
         except Exception:
             pass
@@ -1425,6 +1343,7 @@ def coax_disconnect():
 @require_auth
 @api_action
 def coax_set(sid: int, side: str):
+    """Set a specific coax switch (S1..S3) to side '1' or '2'."""
     global switch
 
     side = str(side).strip()
@@ -1450,7 +1369,6 @@ def coax_set(sid: int, side: str):
     return jsonify(success=True, state=resp, status="Coax command sent")
 
 
-
 @app.route("/coax/status")
 @api_action
 def coax_status():
@@ -1463,12 +1381,7 @@ def coax_status():
     global switch
 
     if not (switch and getattr(switch, "ser", None) and switch.ser.is_open):
-        return jsonify(
-            success=True,
-            connected=False,
-            state="NO SWITCH",
-            switches={},
-        ), 200
+        return jsonify(success=True, connected=False, state="NO SWITCH", switches={}), 200
 
     switches = {}
     state_str = ""
@@ -1492,20 +1405,132 @@ def coax_status():
         switches = {}
         connected = False
 
-    return jsonify(
-        success=True,
-        connected=connected,
-        state=state_str,
-        switches=switches,
-    ), 200
+    return jsonify(success=True, connected=connected, state=state_str, switches=switches), 200
+
 
 # -----------------------------------------------------------------------------
-# Start background threads when the Flask app is used
+# Data page + measurement history API
 # -----------------------------------------------------------------------------
 
+@app.route("/data")
+def data_page():
+    """
+    Data / analysis page.
+
+    - Umlaufbahn (orbit-style) Moon plot
+    - EME measurement history (distance, SNR, etc.)
+    """
+    ports = [p.device for p in serial.tools.list_ports.comports()]
+    return render_template("data.html", state=state, ports=ports)
+
+
+@app.route("/api/measurements")
+def api_measurements():
+    """Return measurement history for charts."""
+    return jsonify(measurements=measurements, count=len(measurements))
+
+
+# -----------------------------------------------------------------------------
+# Stop / park
+# -----------------------------------------------------------------------------
+
+@app.route("/stop", methods=["POST"])
+@require_auth
+@api_action
+def stop():
+    """
+    Immediate stop of movement AND stop tracking thread.
+    Does NOT park – it just freezes everything where it is.
+    """
+    global ant
+
+    if not ant:
+        set_status("error", "Controller not connected!")
+        return jsonify(success=False, status=state["status"]), 400
+
+    stop_tracking_worker()
+
+    try:
+        with serial_lock:
+            ant.stopMovement()
+        set_status("info", "Movement & tracking stopped")
+        return jsonify(success=True, status=state["status"])
+    except Exception as exc:  # noqa: BLE001
+        set_status("error", f"Error while stopping: {exc}")
+        return jsonify(success=False, status=state["status"])
+
+
+@app.route("/park", methods=["POST"])
+@require_auth
+@api_action
+def park():
+    """Send antenna to park position."""
+    global ant
+
+    if not ant:
+        set_status("error", "Controller not connected!")
+        return jsonify(success=False, status=state["status"]), 400
+
+    try:
+        with serial_lock:
+            safe_az_app = safe_azimuth(PARKAZ, state["az"])          # app/sky
+            cmd_az_ctrl = encode_ctrl_az_from_continuous(safe_az_app) # controller cmd
+            ant.send_rot2_set(ant.ser, cmd_az_ctrl, PARKEL)
+            ant.stopMovement()
+
+        set_status("info", "Parkposition set")
+        return jsonify(success=True, status=state["status"])
+    except Exception as exc:  # noqa: BLE001
+        set_status("error", f"Error while parking: {exc}")
+        return jsonify(success=False, status=state["status"])
+
+
+# -----------------------------------------------------------------------------
+# Camera routes
+# -----------------------------------------------------------------------------
+
+@app.route("/camera/health")
+def camera_health():
+    """
+    Report camera health.
+
+    Also attempts to (re)start the camera if it is not running.
+    """
+    ensure_camera_running()
+
+    h = camera.get_health()
+    ok = h["running"] and (h["has_frame"] or h["last_frame_age"] is not None)
+    return jsonify(h), (200 if ok else 503)
+
+
+@app.route("/video.mjpg")
+def video_mjpg():
+    """
+    MJPEG video stream endpoint.
+
+    Frontend uses this inside an <img>. If unhealthy, returns 503 so that
+    the frontend can show a "No video" overlay.
+    """
+    ensure_camera_running()
+
+    h = camera.get_health()
+    ok = h["running"] and (h["has_frame"] or h["last_frame_age"] is not None)
+    if not ok:
+        return Response(status=503)
+
+    return Response(
+        mjpeg_generator(camera, fps=25),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+# -----------------------------------------------------------------------------
+# Background threads startup (safe under flask run / gunicorn)
+# -----------------------------------------------------------------------------
 
 _poll_started = False
 _poll_lock = threading.Lock()
+
 
 def start_background_threads() -> None:
     """
@@ -1518,21 +1543,16 @@ def start_background_threads() -> None:
             threading.Thread(target=poll_loop, daemon=True).start()
             _poll_started = True
 
-class _MeasTee:
-    def __init__(self, original, writer):
-        self.original = original
-        self.writer = writer
 
-    def write(self, s):
-        if s:
-            # split to lines so SSE updates “live”
-            for part in s.splitlines():
-                if part.strip():
-                    self.writer(part)
-        return self.original.write(s)
+@app.before_request
+def ensure_poll_loop_started():
+    # Called before every request; protected by _poll_started + _poll_lock.
+    start_background_threads()
 
-    def flush(self):
-        return self.original.flush()
+
+# -----------------------------------------------------------------------------
+# Output capture helpers for measurement console
+# -----------------------------------------------------------------------------
 
 class _FdTee:
     """
@@ -1589,14 +1609,12 @@ class _FdTee:
         Restore fd and close the write-end so the reader sees EOF and exits,
         then join the reader thread to drain remaining buffered output.
         """
-        # restore original fd (stops new bytes entering the pipe)
         try:
             if self._old_fd_dup is not None:
                 os.dup2(self._old_fd_dup, self.fd)
         except Exception:
             pass
 
-        # closing write-end makes reader exit after draining
         try:
             if self._pipe_w is not None:
                 os.close(self._pipe_w)
@@ -1604,14 +1622,12 @@ class _FdTee:
         except Exception:
             pass
 
-        # wait for reader to finish draining
         try:
             if self._t is not None:
                 self._t.join(timeout=timeout)
         except Exception:
             pass
 
-        # cleanup
         try:
             if self._old_fd_dup is not None:
                 os.close(self._old_fd_dup)
@@ -1622,7 +1638,6 @@ class _FdTee:
     def __exit__(self, exc_type, exc, tb):
         self.close_and_drain(timeout=1.0)
 
-import logging
 
 class _MeasLogHandler(logging.Handler):
     def __init__(self, emit_fn, prefix="LOG: "):
@@ -1672,14 +1687,8 @@ def install_meas_logging(meas_print_fn):
     return restore
 
 
-@app.before_request
-def ensure_poll_loop_started():
-    # This will be called before every request, but the inner logic
-    # only starts the thread once thanks to _poll_started + _poll_lock
-    start_background_threads()
-
 # -----------------------------------------------------------------------------
-# App entry point
+# Entry point
 # -----------------------------------------------------------------------------
 
 def open_browser() -> None:
@@ -1692,5 +1701,6 @@ if __name__ == "__main__":
     threading.Thread(target=poll_loop, daemon=True).start()
 
     threading.Timer(1, open_browser).start()
+
     # IMPORTANT: allow concurrent requests, so serial I/O won't freeze the UI
     app.run(debug=False, threaded=True)

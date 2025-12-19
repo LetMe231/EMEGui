@@ -75,7 +75,133 @@ def add_noise(sig, snr = 0):
 
     return sig + noise, noise_double
 
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+
+# --- Deine MORSE map + set_text() bleiben unverändert ---
+MORSE = {
+    'A':'.-',   'B':'-...', 'C':'-.-.', 'D':'-..',  'E':'.',    'F':'..-.',
+    'G':'--.',  'H':'....', 'I':'..',   'J':'.---', 'K':'-.-',  'L':'.-..',
+    'M':'--',   'N':'-.',   'O':'---',  'P':'.--.', 'Q':'--.-', 'R':'.-.',
+    'S':'...',  'T':'-',    'U':'..-',  'V':'...-', 'W':'.--',  'X':'-..-',
+    'Y':'-.--', 'Z':'--..',
+    '0':'-----','1':'.----','2':'..---','3':'...--','4':'....-',
+    '5':'.....','6':'-....','7':'--...','8':'---..','9':'----.'
+}
+
+def set_text(wpm=20, msg=' ', fs=50):
+    dot_1wpm = 60/50
+    dot_f = (dot_1wpm/wpm)*1.2
+    dot = int(round(dot_f * fs))
+    dash = 3 * dot
+    space_in = dot
+    space_letter = 3 * dot
+    space_word = 7 * dot
+
+    morse = []
+    for i, let in enumerate(msg.upper()):
+        if let == ' ':
+            morse += [-1.0] * space_word
+        else:
+            code = MORSE.get(let)
+            for j, symbol in enumerate(code):
+                morse += [1.0] * dot if symbol == '.' else [1.0] * dash
+                if j != len(code) - 1:
+                    morse += [-1.0] * space_in
+            if i != len(msg) - 1:
+                morse += [-1.0] * space_letter
+
+    morse_f = np.array(morse, dtype=np.float32)
+    length = len(morse_f)/fs
+    return morse_f, length
+
+# --- Noise: SNR bezogen auf mittlere Signalleistung ---
+def add_noise(sig, snr_db, rng=None):
+    if rng is None:
+        rng = np.random.default_rng(42)
+
+    sig = np.asarray(sig, dtype=float)
+    sig_power = np.mean(sig**2)
+    if sig_power == 0:
+        return sig.copy()
+
+    snr_lin = 10**(snr_db/10.0)
+    noise_power = sig_power / snr_lin
+    noise = rng.normal(0.0, np.sqrt(noise_power), size=sig.shape)
+    return sig + noise
+
+# --- Autokorrelation via FFT (linear) ---
+def autocorr_fft(x, fs, remove_mean=True, normalize=True):
+    x = np.asarray(x, dtype=float)
+    if remove_mean:
+        x = x - np.mean(x)
+
+    N = len(x)
+    if N == 0:
+        return np.array([]), np.array([])
+
+    nfft = 1 << int(np.ceil(np.log2(2*N - 1)))
+    X = np.fft.fft(x, n=nfft)
+    r = np.fft.ifft(X * np.conj(X)).real
+    r = r[:(2*N - 1)]                       # linearer Teil
+    r = np.concatenate([r[-(N-1):], r[:N]])  # zentrieren: lags -(N-1)..+(N-1)
+    lags = np.arange(-(N-1), N) / fs
+
+    if normalize and np.max(np.abs(r)) > 0:
+        r = r / np.max(np.abs(r))
+    return lags, r    
+
 if __name__ == "__main__":
+
+    fs = 20000
+    wpm = 50
+    msg = "HB9HSR T"
+
+    morse_tx, _ = set_text(wpm, msg, fs)
+    x_clean = (morse_tx + 1) / 2  # <- genau wie dein Plot: 0/1
+
+    snrs = [0, 2, 5, 10]
+    rng = np.random.default_rng(123)
+
+    # PDF export
+    with PdfPages("morse_autocorr_snr.pdf") as pdf:
+        # 1) Clean + noisy snippets (optional hilfreich)
+        fig1, ax1 = plt.subplots(figsize=(10, 3))
+        t = np.arange(len(x_clean)) / fs
+        ax1.plot(t, x_clean)
+        ax1.set_title("Clean Morse OOK signal (0/1): 'HB9HSR T'")
+        ax1.set_xlabel("Time in s")
+        ax1.set_ylabel("Amplitude")
+        ax1.grid(True)
+        fig1.tight_layout()
+        pdf.savefig(fig1)
+        plt.close(fig1)
+
+        # 2) Autokorrelationen
+        fig2, axes = plt.subplots(len(snrs), 1, figsize=(10, 10), sharex=True)
+        if len(snrs) == 1:
+            axes = [axes]
+
+        for i, snr in enumerate(snrs):
+            x_noisy = add_noise(x_clean, snr_db=snr, rng=rng)
+            lags, rxx = autocorr_fft(x_noisy, fs=fs, remove_mean=True, normalize=True)
+
+            axes[i].plot(lags, rxx)
+            axes[i].set_title(f"Autokorrelation (FFT, linear), SNR = {snr} dB")
+            axes[i].set_ylabel("rxx (norm.)")
+            axes[i].grid(True)
+
+        axes[-1].set_xlabel("Lag in s")
+        fig2.tight_layout()
+        pdf.savefig(fig2)
+        plt.close(fig2)
+
+    print("Saved: morse_autocorr_snr.pdf")
+
+
+
+
     moon_closest = 363104000 #m
     c = 299792458 #m/s
     closest_time = (moon_closest/c) * 2
@@ -87,7 +213,7 @@ if __name__ == "__main__":
     msg = 'HB9HSR DE HB9HSR AR BT EME RANGE MOON BT RTT MEASUREMENT ONLY BT NO REPLY PSE BT EXPERIMENTAL TX BT TNX BT HB9HSR AR SK' # message
 
     callsign, lengthc = set_text(70, 'HB9HSR T', fs)
-    noisy_callsign, noisec = add_noise(callsign, snr)
+    # noisy_callsign, noisec = add_noise(callsign, snr)
 
     # morse, length = set_text(wpm, msg, fs)
     # noisy_morse, noise = add_noise((morse+1)/2, snr)
