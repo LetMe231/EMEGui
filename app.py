@@ -125,6 +125,7 @@ state: Dict[str, Any] = {
     "status_level": "info",
     "status_at": None,
     "az": 0.0,
+    "az_cont": 0.0,
     "el": 0.0,
     "az_norm": 0.0,
     "az_moon": 0.0,
@@ -313,6 +314,19 @@ def unwrap_azimuth(current: float, last: float) -> float:
         delta += 360
     return last + delta
 
+def unwrap_ctrl_az(current_az_deg: float, last_cont: float) -> float:
+    """
+    Unwrap controller-read azimuth into a continuous azimuth.
+    Uses normalized current angle, but produces a continuous result.
+    """
+    cur = norm360(current_az_deg)
+    last_norm = norm360(last_cont)
+    delta = cur - last_norm
+    if delta > 180:
+        delta -= 360
+    elif delta < -180:
+        delta += 360
+    return last_cont + delta
 
 def safe_azimuth(target_az: float, current_az: float) -> float:
     """
@@ -388,8 +402,15 @@ def wait_until_position(
 
         az_app = ctrl_to_app_continuous(az_ctrl)
 
-        state["az"] = round(az_app, 1)
-        state["az_norm"] = round(norm360(az_app), 1)
+        state["az"] = round(az, 1)
+        try:
+            state["az_cont"] = round(
+                unwrap_ctrl_az(az, float(state.get("az_cont", az))),
+                2,
+            )
+        except Exception:
+            state["az_cont"] = round(az, 2)
+        state["az_norm"] = round(state["az"] % 360, 1)
         state["el"] = round(el, 1)
 
         az_ok = abs(ang_err(target_az % 360, az_app % 360)) <= POS_TOL
@@ -456,6 +477,8 @@ def poll_loop() -> None:
     global ant
 
     fail_count = 0
+    last_good_cont: Optional[float] = None
+    MAX_JUMP_DEG = 60.0  # ignore single-sample az jumps bigger than this (noise/wrap glitch)
 
     while True:
         if state["connected"] and ant:
@@ -468,7 +491,6 @@ def poll_loop() -> None:
                 state["az"] = round(az_app, 1)
                 state["az_norm"] = round(norm360(az_app), 1)
                 state["el"] = round(el, 1)
-
                 fail_count = 0
             except Exception as exc:  # noqa: BLE001
                 fail_count += 1
@@ -694,7 +716,7 @@ def set_position():
         set_status("error", "Not connected")
         return jsonify(success=False, status=state["status"]), 400
 
-    cur_app = state["az"]
+    cur_app = float(state.get("az_cont", state["az"]))
     tgt_app = norm360(az_req)
     cont_app = safe_azimuth(tgt_app, cur_app)
     cmd_ctrl_az = encode_ctrl_az_from_continuous(cont_app)
@@ -704,6 +726,7 @@ def set_position():
 
     # Optimistic UI update (poll loop will refine).
     state["az_norm"] = round(norm360(cont_app), 1)
+    state["az_cont"] = round(cont_app, 2)
 
     delta = signed180(tgt_app - cur_app)
     set_status(
@@ -778,7 +801,9 @@ def tracker():
                 moon_cont_az = state["az_moon"]
             last_moon_az = state["az_moon"]
 
-            desired_az = safe_azimuth(moon_cont_az, state["az"])
+            # use continuous az estimate for safe wrap handling
+            cur_cont = float(state.get("az_cont", state["az"]))
+            desired_az = safe_azimuth(moon_cont_az, cur_cont)
             desired_el = state["el_moon"]
 
             if ant is None:
@@ -840,6 +865,19 @@ def tracker():
                 state["az"] = round(cur_az_app, 1)
                 state["az_norm"] = round(norm360(cur_az_app), 1)
                 state["el"] = round(cur_el, 1)
+                # Update state with continuous unwrap (same logic as poll_loop)
+                try:
+                    prev = float(state.get("az_cont", cur_az))
+                    cont = unwrap_ctrl_az(float(cur_az), prev)
+                    # Filter tracking-loop glitches too
+                    if abs(cont - prev) <= 60.0:
+                        state["az_cont"] = round(cont, 2)
+                    state["az"] = round(float(state.get("az_cont", cur_az)), 1)
+                except Exception:
+                    state["az"] = round(cur_az, 1)
+                state["az_norm"] = round(norm360(state["az"]), 1)
+                state["el"] = round(cur_el, 1)
+
 
 
                 err_az = ang_err(desired_az % 360, cur_az_app % 360)
